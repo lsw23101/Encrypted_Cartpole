@@ -13,7 +13,8 @@ Usage
 암호화 없이 단순한 plant controller 통신
 -----------------------------------------
 1. Rasberry의 Communicate_data_trans.go 실행
-```cd ~/Rassberry
+```
+  cd ~/Rassberry
   go run Communicate_data_trans.go
 ```
 
