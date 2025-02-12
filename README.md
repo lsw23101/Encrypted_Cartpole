@@ -18,10 +18,10 @@ Usage
 ```
 
 2. 새로운 터미널 열고 Computer의 Communicate_data_receive.go 실행
-'
+`
   cd ~/Computer
   go run Communicate_data_receive.go
-'
+`
 
 
 암호화 된 데이터 보내고 받기 
