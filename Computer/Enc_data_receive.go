@@ -1,3 +1,8 @@
+/*
+lattigo 를 이용한 암호화 된 데이터 받기
+
+*/
+
 package main
 
 import (
@@ -13,6 +18,7 @@ import (
 
 func main() {
 	// 컨트롤러 소켓 설정
+	// Communicate.go 파일과 동일하게 통신하여 데이터 받음
 	conn, err := net.Dial("tcp", "172.20.61.165:8080") // 라즈베리파이의 IP 주소와 포트
 	if err != nil {
 		fmt.Println("서버에 연결 실패:", err)
@@ -21,6 +27,7 @@ func main() {
 	defer conn.Close()
 
 	// Generate plaintext modulus // 암호데이터 바이너리값
+	// trans 파일과 동일하게 파라미터를 설정
 
 	logN := 12
 	primeGen := ring.NewNTTFriendlyPrimesGenerator(18, uint64(math.Pow(2, float64(logN)+1)))
@@ -34,6 +41,7 @@ func main() {
 		PlaintextModulus: prime,
 	})
 
+	// 여기서 ct0는 암호공간의 메세지
 	ct0 := rlwe.NewCiphertext(params, params.MaxLevel())
 
 	// 데이터 수신 버퍼 설정
@@ -89,6 +97,6 @@ func main() {
 
 	// // 다시 decode binary to Ploy
 
-	// 복원된 Ciphertext 객체 출력
+	// 복원된 Ciphertext 객체 출력, 기존 통신보내기 전 값과 동일한 값
 	// fmt.Printf("받은 ciphertext 객체: %+v\n", ct0)
 }
