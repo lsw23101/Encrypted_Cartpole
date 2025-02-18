@@ -20,6 +20,7 @@ func main() {
 	// *****************************************************************
 	// ************************* User's choice *************************
 	// *****************************************************************
+
 	// ============== Encryption parameters ==============
 	// Refer to ``Homomorphic encryption standard''
 
@@ -56,6 +57,8 @@ func main() {
 	}
 
 	// transpose of Yini from conversion.m
+	// 초기값 시퀀스 이 부분도 암호화 해서 넘겨줬기 때문에 정리 가능해보임
+
 	yy0 := [][]float64{
 		{-168.915339084001, 152.553129120773},
 		{0, 0},
@@ -96,21 +99,23 @@ func main() {
 	fmt.Println("Ciphertext modulus:", params.QBigInt())
 	fmt.Println("Degree of polynomials:", params.N())
 
+	// 미리 만들어둔 sk 를 사용할 예정이므로 여기서 sk 생성은 주석처리
 	// Generate secret key
 	// kgen := bgv.NewKeyGenerator(params)
 	// sk := kgen.GenSecretKeyNew()
 
-	// 키 원래 만든거로 계속 가기
-	sk := rlwe.NewSecretKey(params) // 이거는 빈 sk 만드는 함수
+	// 비어있는 sk 객체 생성 후 데이터 읽기
+	sk := rlwe.NewSecretKey(params)
 	com_utils.ReadFromFile("sk.dat", sk)
 
+	// 암호화, 패킹에 필요한 객체
 	encryptor := bgv.NewEncryptor(params, sk)
 	decryptor := bgv.NewDecryptor(params, sk)
 	encoder := bgv.NewEncoder(params)
 
 	bredparams := ring.GenBRedConstant(params.PlaintextModulus())
 
-	// ==============  Encryption of controller ==============
+	// ARX controller 와 관련하여 vecterize 등의 작업
 	// dimensions
 	n := len(A)
 	l := len(C)
@@ -133,7 +138,6 @@ func main() {
 	ctY := make([]*rlwe.Ciphertext, n)
 	ctU := make([]*rlwe.Ciphertext, n)
 
-	// Quantization - packing - encryption
 	for i := 0; i < n; i++ {
 		ptY[i] = bgv.NewPlaintext(params, params.MaxLevel())
 		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, yy0vec[i])), params.PlaintextModulus()), ptY[i])
@@ -145,7 +149,8 @@ func main() {
 
 	}
 
-	// 시뮬
+	// 통신 소켓 설정
+
 	// listen, err := net.Listen("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
 	listen, err := net.Listen("tcp", "127.0.0.1:8080") //
 	if err != nil {
@@ -165,8 +170,6 @@ func main() {
 	defer conn.Close()
 	fmt.Println("컨트롤러와 연결됨:", conn.RemoteAddr())
 
-	///////////////////////////////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////
 	// ============== Simulation ==============
 	// Number of simulation steps
 	iter := 500
@@ -176,59 +179,50 @@ func main() {
 	xp := xp0
 
 	for i := 0; i < iter; i++ {
-		//////////////////// **** Sensor ****
 		fmt.Println(i+1, "번째 이터레이션")
+
+		///////
+		// 플랜트는 Y를 암호화해서 Ycin 보내고
+		// Uout을 받아 복호화하여 U를 받고
+		// 재암호화 하여 U cin을 다시 보냄
+		//////
+
 		// 시간 측정 시작 (전체 루프)
 		startLoop := time.Now()
 
-		// Plant output /// 1번단계!!
+		// 플랜트 출력 계산
+		// 실제 실험 장비에서는 이 부분이 아두이노의 센서 값이 될 예정
 		Y := utils.MatVecMult(C, xp) // [][]float64
 
-		// fmt.Println("이터레이션 시작할때 Y:", Y)
-
-		// Quantize and duplicate // 2번 단계 !!
+		// Quantize and duplicate
+		// ARX 형태로 패킹하여 암호화
 		Ysens := utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(Y, m, h))), params.PlaintextModulus())
 		Ypacked := bgv.NewPlaintext(params, params.MaxLevel())
 		encoder.Encode(Ysens, Ypacked)
 		Ycin, _ := encryptor.EncryptNew(Ypacked)
 
-		//////////////////// 첫 번째 송신 /////////////////////////////
-		////////////// 여기서 출력 송신
-		// 출력값 전송
-
-		// 위에서 구한 Ycin 을 직렬화 해서 밑에 담기
-
+		// Ycin 송신
 		serialized_Ycin, err := Ycin.MarshalBinary() // 이런 식으로
 
-		// 마샬링 시간 계산
+		// fmt.Println("Y 크기.", len(serialized_Ycin)) // >> 131406
 
-		// 시간 측정 시작 (송신)
-		startTransmission := time.Now()
-		// 패킹했으니까 하나의 값이지 않을까 예상.... 즉 통신하는건 하나의 ciphertext
-		fmt.Println("Y 크기.", len(serialized_Ycin))
 		_, err = conn.Write([]byte(serialized_Ycin)) // 리스트 값을 문자열로 전송
 		if err != nil {
 			fmt.Println("출력값 전송 실패:", err)
 			break
 		}
 		// 송신 시간 계산
-		fmt.Println("송신 시간:", time.Since(startTransmission))
+		fmt.Println("Ycin 송신 후 시간:", time.Since(startLoop))
 
-		//////////// 여기서 u 수신 3번단계를 컨트롤러가하고
-		///////////// 여기는 4번 단계 !!!!
-
-		// 여기서 ct0는 암호공간의 메세지
+		// 여기서 제어 입력 받는 부분
 		Uout := rlwe.NewCiphertext(params, params.MaxLevel())
-		// 데이터 수신 버퍼 설정
-		chunkSize := 363
+		// 데이터 수신 버퍼 설정 버퍼 설정과 관련해서는 좀 더 논의가 필요
+		chunkSize := 736
 
-		buf := make([]byte, chunkSize) // 1024 바이트씩 수신
-		// buf := make([]byte, 65000)
+		buf := make([]byte, chunkSize) //
 
-		// 데이터 수신을 위한 누적된 결과 저장
 		var totalData []byte
 
-		// fmt.Println("Uout 받기직전 ", len(totalData))
 		for {
 			// 데이터 수신 (서버에서 전송한 바이너리 데이터 받기)
 			n, err := conn.Read(buf)
@@ -236,19 +230,11 @@ func main() {
 				fmt.Println("수신 오류:", err)
 				break
 			}
-
-			// 수신된 데이터 누적
-			// time.Sleep(10 * time.Millisecond)
 			totalData = append(totalData, buf[:n]...)
-			// fmt.Println("받고있는 total 크기: ", len(totalData)) 얘는 한방에 해도 잘 됨
-			// 만약 전체 데이터를 다 받았으면 종료
-			// Uout은 크기가 저러네
 			if len(totalData) >= 196966 { // 예시로 131406 크기만큼 받으면 종료
 				break
 			}
 		}
-
-		// 여기서 직렬화
 
 		err = Uout.UnmarshalBinary(totalData[:196966])
 		if err != nil {
@@ -257,9 +243,9 @@ func main() {
 			return
 		}
 
-		////// 여기서 4단계가 끝나고 Uout << 암호화 된 값을 받아왔음
+		// **** Actuator ****
 
-		// **** Actuator **** ////////// 여기서 U cin 재암호화 한거 보내기
+		// ARX 형태를 U로 바꾸는 작업
 		// Plant input
 		U := make([]float64, m)
 		// Unpacked and re-scaled u at actuator
@@ -273,19 +259,15 @@ func main() {
 			U[k] = float64(r * s * utils.SignFloat(float64(Usum[k]), params.PlaintextModulus()))
 		}
 
-		// 위에 연산은 ARX관련한 그냥 그거고 결국 위에서 끝난 U가 메세지공간의 값
-
-		// Re-encryption
+		// Re-encryption 재 암호화
 		Upacked := bgv.NewPlaintext(params, params.MaxLevel())
 		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(U, m, h))), params.PlaintextModulus()), Upacked)
 		Ucin, _ := encryptor.EncryptNew(Upacked)
 
-		// 여기서 재암호화 한 Ucin 다시 보내기 직렬화 해줘서 보내야겠지?
-
+		// 재 암호화 값 보내기 전 디버그용 통신
 		conn.Write([]byte("ACK"))
 
-		///////////////////// 두 번째 송신 ////////////////////////////
-		// 위에서 구한 Ucin 데이터 보내기 !!
+		// 직렬화 후 송신
 		serialized_reenc_U, err := Ucin.MarshalBinary() // 이런 식으로
 		fmt.Println("재입력 U 크기.", len(serialized_reenc_U))
 
@@ -295,25 +277,24 @@ func main() {
 			break
 		}
 
-		// **** Plant ****
 		// State update
 		xp = utils.VecAdd(utils.MatVecMult(A, xp), utils.MatVecMult(B, U))
-
-		// fmt.Println("이터레이션 끝날때 U:", U)
 
 		fmt.Println("xp 업데이트: ")
 		for i := 0; i < len(xp); i++ {
 			fmt.Printf("%v\n", xp[i])
 		}
-		// 시간 측정 끝 (전체 루프)
-		fmt.Println("전체 루프 시간:", time.Since(startLoop))
 
+		// 루프 끝난 후 수신 과정 한번 해주어야 오류 안생김
 		ackBuf := make([]byte, 3)
 		_, err = conn.Read(ackBuf)
 		if err != nil || string(ackBuf) != "ACK" {
 			fmt.Println("ACK 수신 실패:", err)
 			return
 		}
+
+		// 시간 측정 끝 (전체 루프)
+		fmt.Println("전체 루프 시간:", time.Since(startLoop))
 	}
 
 }
