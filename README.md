@@ -2,7 +2,12 @@ Capstone_encryted_control
 =============
 2025 Capstone project repository
 
-현재 30ms 이내로 한 루프
+Description
+====
+- 현재 30ms 이내로 한 루프
+- com_utils : 파일 읽고 쓰기 관련 함수
+- backup : 백업용 
+
 
 Requirment
 =============
