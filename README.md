@@ -34,7 +34,7 @@ cd Enc_control_RLWE
 ```
 
 ```
-git clone https://github.com/lsw23101/Capstone_encryted_control/edit/main/README.md
+git clone https://github.com/lsw23101/Capstone_encryted_control
 ```
 
 
