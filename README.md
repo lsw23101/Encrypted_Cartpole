@@ -25,13 +25,7 @@ Preliminary
 Usage
 =============
 
-```
-mkdir Enc_control_RLWE
-```
 
-```
-cd Enc_control_RLWE
-```
 
 ```
 git clone https://github.com/lsw23101/Capstone_encryted_control
