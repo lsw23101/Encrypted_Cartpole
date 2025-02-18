@@ -72,7 +72,7 @@ func main() {
 			break
 		}
 	}
-
+	fmt.Println("수신된 데이터가 부족합니다. 현재 길이:", len(totalData))
 	// _, err = conn.Read(buf)
 	// if err != nil {
 	// 	fmt.Println("수신 오류:", err)
