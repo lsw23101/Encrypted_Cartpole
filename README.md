@@ -25,6 +25,19 @@ Preliminary
 Usage
 =============
 
+'''
+mkdir Enc_control_RLWE
+'''
+
+'''
+cd Enc_control_RLWE
+'''
+
+'''
+git clone https://github.com/lsw23101/Capstone_encryted_control/edit/main/README.md
+'''
+
+
 plant와 controller 코드에서 ip 설정
 
 <terminal 1>
