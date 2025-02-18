@@ -4,7 +4,7 @@ Capstone_encryted_control
 
 Description
 ====
-- 현재 한 루프에 30ms ~ 60ms 정도 소요
+- 현재 한 루프에 30ms ~ 60ms 정도 소요 >> 소켓 크기를 363으로 했을 시 30ms 이내
 - 한번씩 통신 오류 발생
 - com_utils : 파일 읽고 쓰기 관련 함수
 - backup : 백업용 
