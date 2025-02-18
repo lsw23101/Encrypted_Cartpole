@@ -4,7 +4,7 @@ Capstone_encryted_control
 
 Description
 ====
-- 현재 한 루프에 30ms ~ 60ms 정도 소요 >> 소켓 크기를 363으로 했을 시 30ms 이내
+- 현재 한 루프에 30ms 이내
 - 한번씩 통신 오류 발생
 - com_utils : 파일 읽고 쓰기 관련 함수
 - backup : 백업용 
@@ -55,6 +55,8 @@ go run controller.go
 
 Todo
 ====
+
+통신 환경에 따라 루프 당 걸리는 시간 변동이 심함 
 
 중간에 통신 끊기는 상황 처리
 
