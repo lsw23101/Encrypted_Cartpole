@@ -25,6 +25,8 @@ Preliminary
 Usage
 =============
 
+plant와 controller 코드에서 ip 설정
+
 <terminal 1>
 ```
 cd ~/Rasberry
