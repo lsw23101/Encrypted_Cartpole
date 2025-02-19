@@ -116,8 +116,8 @@ func main() {
 
 	// 컨트롤러 소켓 연결설정
 
-	conn, err := net.Dial("tcp", "127.0.0.1:8080") // 서버에서 설정한 ip
-	// conn, err := net.Dial("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
+	// conn, err := net.Dial("tcp", "127.0.0.1:8080") // 서버에서 설정한 ip
+	conn, err := net.Dial("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
 	if err != nil {
 		fmt.Println("서버에 연결 실패:", err)
 		return
@@ -156,7 +156,7 @@ func main() {
 		}
 
 		// 마샬링 시간 계산
-		// fmt.Println("Ycin 받는데 걸리는 시간:", time.Since(loop_start))
+		fmt.Println("첫 통신 Ycin 받는데 걸리는 시간:", time.Since(loop_start))
 
 		err = Ycin.UnmarshalBinary(totalData[:131406])
 		if err != nil {
@@ -169,6 +169,8 @@ func main() {
 
 		// 여기서 컨트롤러 입력 U을 계산
 
+		compute_u := time.Now()
+
 		Uout, _ := eval.MulNew(recovered_ctHy[0], recovered_ctY[0])
 
 		eval.MulThenAdd(recovered_ctHu[0], recovered_ctU[0], Uout)
@@ -177,7 +179,7 @@ func main() {
 			eval.MulThenAdd(recovered_ctHu[j], recovered_ctU[j], Uout)
 		}
 
-		// fmt.Println("여기서 출력 계산 끝남:", time.Since(loop_start))
+		fmt.Println("제어기 암호 연산 시간:", time.Since(compute_u))
 
 		serialized_Uout, err := Uout.MarshalBinary() // 이런 식으로
 
@@ -190,27 +192,22 @@ func main() {
 			break
 		}
 
-		// fmt.Println("여기서 U 전송 끝남: ", time.Since(loop_start))
+		fmt.Println("Uout 연산 후 전송 시간", time.Since(compute_u))
 
 		// 재암호화 값 받기
 
 		Ucin := rlwe.NewCiphertext(params, params.MaxLevel())
 
-		// ACK 수신 통신 관련 디버그용 이후 지울 예정
-
-		ackBuf := make([]byte, 3)
-		_, err = conn.Read(ackBuf)
-		if err != nil || string(ackBuf) != "ACK" {
-			fmt.Println("ACK 수신 실패:", err)
-			return
-		}
+		get_reenc := time.Now()
 
 		fmt.Println("재암호화 받기 전:", time.Since(loop_start))
 		totalData_reenc, err := readFullData(conn, 131406)
 		if err != nil {
-			fmt.Println("Ycin 데이터 수신 실패:", err)
+			fmt.Println("Ucin 데이터 수신 실패:", err)
 			return
 		}
+
+		fmt.Println("재암호화 받는데 걸리는 시간 : ", time.Since(get_reenc))
 
 		err = Ucin.UnmarshalBinary(totalData_reenc[:131406])
 		if err != nil {

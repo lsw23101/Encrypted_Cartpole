@@ -217,7 +217,7 @@ func main() {
 		// 여기서 제어 입력 받는 부분
 		Uout := rlwe.NewCiphertext(params, params.MaxLevel())
 		// 데이터 수신 버퍼 설정 버퍼 설정과 관련해서는 좀 더 논의가 필요
-		chunkSize := 736
+		chunkSize := 732
 
 		buf := make([]byte, chunkSize) //
 
@@ -263,9 +263,6 @@ func main() {
 		Upacked := bgv.NewPlaintext(params, params.MaxLevel())
 		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(U, m, h))), params.PlaintextModulus()), Upacked)
 		Ucin, _ := encryptor.EncryptNew(Upacked)
-
-		// 재 암호화 값 보내기 전 디버그용 통신
-		conn.Write([]byte("ACK"))
 
 		// 직렬화 후 송신
 		serialized_reenc_U, err := Ucin.MarshalBinary() // 이런 식으로
