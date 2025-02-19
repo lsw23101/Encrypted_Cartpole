@@ -12,20 +12,6 @@ import (
 	"github.com/tuneinsight/lattigo/v6/schemes/bgv"
 )
 
-func readFullData(conn net.Conn, expectedSize int) ([]byte, error) {
-	totalData := make([]byte, 0, expectedSize)
-	buf := make([]byte, 726) // 청크 크기를 작게 설정 (4KB)
-
-	for len(totalData) < expectedSize {
-		n, err := conn.Read(buf)
-		if err != nil {
-			return nil, fmt.Errorf("수신 오류: %v", err)
-		}
-		totalData = append(totalData, buf[:n]...)
-	}
-	return totalData, nil
-}
-
 func main() {
 	// *****************************************************************
 	// ************************* User's choice *************************
@@ -116,8 +102,8 @@ func main() {
 
 	// 컨트롤러 소켓 연결설정
 
-	// conn, err := net.Dial("tcp", "127.0.0.1:8080") // 서버에서 설정한 ip
-	conn, err := net.Dial("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
+	conn, err := net.Dial("tcp", "127.0.0.1:8080") // 서버에서 설정한 ip
+	// conn, err := net.Dial("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
 	if err != nil {
 		fmt.Println("서버에 연결 실패:", err)
 		return
@@ -149,7 +135,7 @@ func main() {
 		// fmt.Println("첫번째 통신 시작 지점 ")
 
 		// 여기서 131406은 파라미터로 설정한 q값에 따른 ct의 바이너리 크기
-		totalData, err := readFullData(conn, 131406)
+		totalData, err := com_utils.ReadFullData(conn, 131406)
 		if err != nil {
 			fmt.Println("Ycin 데이터 수신 실패:", err)
 			return
@@ -201,7 +187,7 @@ func main() {
 		get_reenc := time.Now()
 
 		fmt.Println("재암호화 받기 전:", time.Since(loop_start))
-		totalData_reenc, err := readFullData(conn, 131406)
+		totalData_reenc, err := com_utils.ReadFullData(conn, 131406)
 		if err != nil {
 			fmt.Println("Ucin 데이터 수신 실패:", err)
 			return

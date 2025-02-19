@@ -3,10 +3,25 @@ package com_utils
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 )
+
+func ReadFullData(conn net.Conn, expectedSize int) ([]byte, error) {
+	totalData := make([]byte, 0, expectedSize)
+	buf := make([]byte, 726) // 청크 크기 조절 확인 필요
+
+	for len(totalData) < expectedSize {
+		n, err := conn.Read(buf)
+		if err != nil {
+			return nil, fmt.Errorf("수신 오류: %v", err)
+		}
+		totalData = append(totalData, buf[:n]...)
+	}
+	return totalData, nil
+}
 
 func WriteToFile(data interface{}, filename string) error {
 	// "enc_data" 폴더가 없으면 생성

@@ -217,24 +217,13 @@ func main() {
 		// 여기서 제어 입력 받는 부분
 		Uout := rlwe.NewCiphertext(params, params.MaxLevel())
 		// 데이터 수신 버퍼 설정 버퍼 설정과 관련해서는 좀 더 논의가 필요
-		chunkSize := 732
-
-		buf := make([]byte, chunkSize) //
-
-		var totalData []byte
 
 		fmt.Println("U out 수신 직전:", time.Since(startLoop))
-		for {
-			// 데이터 수신 (서버에서 전송한 바이너리 데이터 받기)
-			n, err := conn.Read(buf)
-			if err != nil {
-				fmt.Println("수신 오류:", err)
-				break
-			}
-			totalData = append(totalData, buf[:n]...)
-			if len(totalData) >= 196966 { // 예시로 131406 크기만큼 받으면 종료
-				break
-			}
+
+		totalData, err := com_utils.ReadFullData(conn, 196966)
+		if err != nil {
+			fmt.Println("Uout 데이터 수신 실패:", err)
+			return
 		}
 
 		fmt.Println("U out 수신 후 :", time.Since(startLoop))
