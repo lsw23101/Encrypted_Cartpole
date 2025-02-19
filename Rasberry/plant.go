@@ -223,6 +223,7 @@ func main() {
 
 		var totalData []byte
 
+		fmt.Println("U out 수신 직전:", time.Since(startLoop))
 		for {
 			// 데이터 수신 (서버에서 전송한 바이너리 데이터 받기)
 			n, err := conn.Read(buf)
@@ -235,6 +236,8 @@ func main() {
 				break
 			}
 		}
+
+		fmt.Println("U out 수신 후 :", time.Since(startLoop))
 
 		err = Uout.UnmarshalBinary(totalData[:196966])
 		if err != nil {
@@ -259,6 +262,7 @@ func main() {
 			U[k] = float64(r * s * utils.SignFloat(float64(Usum[k]), params.PlaintextModulus()))
 		}
 
+		fmt.Println("재암호화 하기 직전:", time.Since(startLoop))
 		// Re-encryption 재 암호화
 		Upacked := bgv.NewPlaintext(params, params.MaxLevel())
 		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(U, m, h))), params.PlaintextModulus()), Upacked)
