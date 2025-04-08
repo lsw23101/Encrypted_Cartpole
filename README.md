@@ -33,6 +33,17 @@ Usage
 git clone https://github.com/lsw23101/Enc_control_RLWE
 ```
 
+'''
+sudo apt update
+sudo apt install g++ libgmp-dev libmpfr-dev libboost-all-dev cmake python3-dev
+
+
+pip install fpylll 
+// 설치 까다로움
+'''
+
+
+
 
 plant와 controller 코드에서 ip 설정
 
@@ -59,9 +70,11 @@ Todo
 
 통신 환경에 따라 루프 당 걸리는 시간 변동이 심함 
 
-중간에 통신 끊기는 상황 처리
+중간에 통신 끊기는 상황 예외 처리
 
 코드 정리
+
+N이 작을때의 원격 컨트롤러 구현해서 비밀 키 빼내는 부분 제작
 
 # Added 
 ===
