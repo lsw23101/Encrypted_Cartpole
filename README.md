@@ -33,14 +33,16 @@ Usage
 git clone https://github.com/lsw23101/Enc_control_RLWE
 ```
 
-'''
+
+
+```
 sudo apt update
 sudo apt install g++ libgmp-dev libmpfr-dev libboost-all-dev cmake python3-dev
 
 
 pip install fpylll 
 // 설치 까다로움
-'''
+```
 
 
 
