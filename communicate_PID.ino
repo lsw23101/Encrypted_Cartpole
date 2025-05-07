@@ -21,7 +21,7 @@ unsigned long lastCommandTime = 0;
 const unsigned long timeoutDuration = 200;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   pinMode(MOTOR1_IN1_PIN, OUTPUT);
   pinMode(MOTOR1_IN2_PIN, OUTPUT);

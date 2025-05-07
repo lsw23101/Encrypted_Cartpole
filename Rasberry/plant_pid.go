@@ -12,9 +12,8 @@ import (
 
 func main() {
 	// 시리얼 포트 설정
-	// 아두이노 <-> 라즈베리파이
 	mode := &serial.Mode{
-		BaudRate: 9600,
+		BaudRate: 115200,
 	}
 	port, err := serial.Open("/dev/ttyACM0", mode)
 	if err != nil {
@@ -24,10 +23,8 @@ func main() {
 	defer port.Close()
 	fmt.Println("아두이노와 연결됨")
 
-	// PC와 통신
 	// TCP 클라이언트 연결
 	conn, err := net.Dial("tcp", "192.168.0.5:8080")
-	// conn, err := net.Dial("tcp", "127.0.0.1:8080")
 	if err != nil {
 		fmt.Println("TCP 연결 실패:", err)
 		return
@@ -39,10 +36,12 @@ func main() {
 	tcpReader := bufio.NewReader(conn)
 
 	for {
-		start := time.Now() // 루프 시작 시간
+		loopStart := time.Now()
 
-		// 아두이노로 값 받기
+		// ① 시리얼 읽기
+		t1 := time.Now()
 		line, err := serialReader.ReadString('\n')
+		t2 := time.Now()
 		if err != nil {
 			fmt.Println("시리얼 읽기 실패:", err)
 			continue
@@ -51,37 +50,45 @@ func main() {
 		if line == "" || !strings.Contains(line, ",") {
 			continue
 		}
-
+		fmt.Printf("① 시리얼 수신 완료 (%v)\n", t2.Sub(t1))
 		fmt.Println("받은 데이터 (Angle, Distance):", line)
 
-		// 서버로 데이터 전송
+		// ② TCP 송신
+		t3 := time.Now()
 		_, err = conn.Write([]byte(line + "\n"))
+		t4 := time.Now()
 		if err != nil {
 			fmt.Println("서버로 데이터 전송 실패:", err)
 			break
 		}
+		fmt.Printf("② TCP 전송 완료 (%v)\n", t4.Sub(t3))
 
-		// Q: 타입 슬립 필요할까 ?
-
-		// 서버에서 제어값 수신
+		// ③ TCP 응답 수신
+		t5 := time.Now()
 		response, err := tcpReader.ReadString('\n')
+		t6 := time.Now()
 		if err != nil {
 			fmt.Println("서버 응답 수신 실패:", err)
 			break
 		}
 		response = strings.TrimSpace(response)
+		fmt.Printf("③ TCP 응답 수신 완료 (%v)\n", t6.Sub(t5))
 
-		// 제어값 시리얼로 전송
+		// ④ 시리얼 송신
+		t7 := time.Now()
 		_, err = port.Write([]byte(response + "\n"))
+		t8 := time.Now()
 		if err != nil {
 			fmt.Println("아두이노로 전송 실패:", err)
 			break
 		}
-
+		fmt.Printf("④ 시리얼 송신 완료 (%v)\n", t8.Sub(t7))
 		fmt.Println("PWM/Dir 전송:", response)
+
 		time.Sleep(10 * time.Millisecond)
 
-		elapsed := time.Since(start)
-		fmt.Printf("루프 처리 시간: %v\n", elapsed)
+		loopElapsed := time.Since(loopStart)
+		fmt.Printf("총 루프 처리 시간: %v\n", loopElapsed)
+		fmt.Println("-----------------------------------")
 	}
 }
