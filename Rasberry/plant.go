@@ -151,8 +151,8 @@ func main() {
 
 	// 통신 소켓 설정
 
-	// listen, err := net.Listen("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
-	listen, err := net.Listen("tcp", "127.0.0.1:8080") //
+	listen, err := net.Listen("tcp", "192.168.0.30:8080") // 연구실 라즈베리파이 ip
+	// listen, err := net.Listen("tcp", "127.0.0.1:8080") //
 	if err != nil {
 		fmt.Println("서버 소켓 설정 실패:", err)
 		os.Exit(1)
