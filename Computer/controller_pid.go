@@ -10,13 +10,13 @@ import (
 )
 
 func main() {
-	listener, err := net.Listen("tcp", "127.0.0.1:8080") // 내부 통신으로 변경
+	listener, err := net.Listen("tcp", "192.168.0.5") // 내부 통신으로 변경
 	if err != nil {
 		fmt.Println("TCP 리스너 실패:", err)
 		return
 	}
 	defer listener.Close()
-	fmt.Println("PID 서버 실행 중 (127.0.0.1:8080)")
+	fmt.Println("PID 서버 실행 중")
 
 	conn, err := listener.Accept()
 	if err != nil {
@@ -26,6 +26,7 @@ func main() {
 	defer conn.Close()
 	fmt.Println("클라이언트 연결됨")
 
+	// PID 게인 설정
 	Kp := 20.0
 	Ki := 0.0
 	Kd := 40.0
