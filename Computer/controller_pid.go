@@ -7,10 +7,11 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
-	listener, err := net.Listen("tcp", "192.168.0.5") // 내부 통신으로 변경
+	listener, err := net.Listen("tcp", "192.168.0.5:8080") // 내부 통신으로 변경
 	if err != nil {
 		fmt.Println("TCP 리스너 실패:", err)
 		return
@@ -36,6 +37,8 @@ func main() {
 	reader := bufio.NewReader(conn)
 
 	for {
+		start := time.Now() // 루프 시작 시간
+
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("데이터 수신 실패:", err)
@@ -70,5 +73,8 @@ func main() {
 		}
 
 		fmt.Printf("받은 각도: %.2f -> PWM: %d | Dir: %d\n", angle, pwm, dir)
+
+		elapsed := time.Since(start)
+		fmt.Printf("루프 처리 시간: %v\n", elapsed)
 	}
 }

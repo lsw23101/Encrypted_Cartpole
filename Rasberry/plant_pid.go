@@ -83,7 +83,5 @@ func main() {
 
 		elapsed := time.Since(start)
 		fmt.Printf("루프 처리 시간: %v\n", elapsed)
-
-		time.Sleep(10 * time.Millisecond)
 	}
 }
