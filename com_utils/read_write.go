@@ -2,9 +2,12 @@ package com_utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 )
@@ -100,4 +103,34 @@ func ReadFromFile(filename string, data interface{}) error {
 	}
 
 	return nil
+}
+
+// ReadAndParseSerial reads a line from the serial reader, and returns parsed angle and distance.
+func ReadAndParseSerial(reader *bufio.Reader) (angle float64, distance float64, err error) {
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return 0, 0, err
+	}
+
+	fmt.Printf("⚠️ 원시 시리얼 입력: [%s]\n", line) // 원시 데이터 출력
+
+	line = strings.TrimSpace(line)
+	fmt.Printf("⚠️ Trimmed line: [%s]\n", line) // 트림된 데이터 출력
+
+	if line == "" || !strings.Contains(line, ",") {
+		return 0, 0, errors.New("invalid or empty serial data")
+	}
+
+	parts := strings.Split(line, ",")
+	if len(parts) != 2 {
+		return 0, 0, errors.New("malformed serial data")
+	}
+
+	angle, err1 := strconv.ParseFloat(parts[0], 64)
+	distance, err2 := strconv.ParseFloat(parts[1], 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, errors.New("failed to parse float values")
+	}
+
+	return angle, distance, nil
 }

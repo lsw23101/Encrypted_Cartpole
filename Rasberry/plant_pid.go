@@ -15,7 +15,8 @@ func main() {
 	mode := &serial.Mode{
 		BaudRate: 115200,
 	}
-	port, err := serial.Open("/dev/ttyACM0", mode)
+	//port, err := serial.Open("/dev/ttyACM0", mode) // 아두이노와 라즈베리파이 연결 포트
+	port, err := serial.Open("COM4", mode) // 컴퓨터랑 연결할때 COM4에 연결
 	if err != nil {
 		fmt.Println("아두이노와 실패:", err)
 		return
@@ -24,7 +25,8 @@ func main() {
 	fmt.Println("아두이노와 연결됨")
 
 	// TCP 클라이언트 연결
-	conn, err := net.Dial("tcp", "192.168.0.5:8080")
+	//conn, err := net.Dial("tcp", "192.168.0.5:8080")
+	conn, err := net.Dial("tcp", "127.0.0.1:8080")
 	if err != nil {
 		fmt.Println("TCP 연결 실패:", err)
 		return
