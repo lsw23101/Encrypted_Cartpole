@@ -84,11 +84,13 @@ func main() {
 			return
 		}
 
-		fmt.Println("Ycin :", Ycin)
+		//fmt.Println("Ycin :", Ycin)
 
 		Uout, _ := eval.MulNew(Ycin, Kp)
+		// 이건 나중에 P D 계산한거 MultAdd 함수로 구현하기
+		// Uout := Ycin // 일단 받은 값 그대로 보내기
 
-		fmt.Println("Uout :", Uout)
+		//fmt.Println("Uout :", Uout)
 
 		serialized_Uout, err := Uout.MarshalBinary() // 이런 식으로
 

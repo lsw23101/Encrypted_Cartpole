@@ -87,7 +87,7 @@ func main() {
 		fmt.Printf("④ 시리얼 송신 완료 (%v)\n", t8.Sub(t7))
 		fmt.Println("PWM/Dir 전송:", response)
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 
 		loopElapsed := time.Since(loopStart)
 		fmt.Printf("총 루프 처리 시간: %v\n", loopElapsed)

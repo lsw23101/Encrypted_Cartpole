@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.bug.st/serial"
@@ -30,7 +32,8 @@ func main() {
 		return
 	}
 	defer port.Close()
-	fmt.Println("아두이노와 연결됨")
+	fmt.Println("포트 연결됨. 아두이노 리셋 대기 중...")
+	time.Sleep(1 * time.Second)
 
 	// TCP 클라이언트 연결
 	//conn, err := net.Dial("tcp", "192.168.0.5:8080")
@@ -43,7 +46,6 @@ func main() {
 	fmt.Println("컨트롤러 서버와 TCP 연결됨")
 
 	serialReader := bufio.NewReader(port)
-	// tcpReader := bufio.NewReader(conn)
 
 	////// 여기서부터 암호화 하기 ///////
 
@@ -89,22 +91,48 @@ func main() {
 	for {
 		loopStart := time.Now()
 
+		// ① 시리얼 읽기
 		t1 := time.Now()
-		angle, distance, err := com_utils.ReadAndParseSerial(serialReader)
+		line, err := serialReader.ReadString('\n')
 		t2 := time.Now()
 		if err != nil {
-			fmt.Println("시리얼 읽기 실패:", err)
+			fmt.Println("읽기 오류:", err)
+			continue
+		}
+		fmt.Println(">>", line)
+
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.Contains(line, ",") {
 			continue
 		}
 		fmt.Printf("① 시리얼 수신 완료 (%v)\n", t2.Sub(t1))
-		fmt.Printf("받은 데이터 → Angle: %.2f, Distance: %.2f\n", angle, distance)
+		fmt.Println("받은 데이터 (Angle, Distance):", line)
+
+		// 문자열을 쉼표로 분리
+		parts := strings.Split(line, ",")
+		if len(parts) != 2 {
+			fmt.Println("파싱 오류: 예상 형식 'angle,distance'")
+			continue
+		}
+
+		// 문자열을 float64로 변환
+		angle, err := strconv.ParseFloat(parts[0], 64)
+		if err != nil {
+			fmt.Println("Angle 파싱 실패:", err)
+			continue
+		}
+		// distance, err := strconv.ParseFloat(parts[1], 64)
+		// if err != nil {
+		// 	fmt.Println("Distance 파싱 실패:", err)
+		// 	continue
+		// }
 
 		// 여기서 암호화
 		quantized_angle := math.Round((1 / r) * angle)
 		fmt.Println("양자화 된 각도 :", quantized_angle)
 
-		encode := make([]uint64, 1)
-		encode[0] = uint64(quantized_angle)
+		encode := make([]int64, 1)
+		encode[0] = int64(quantized_angle)
 
 		encoder.Encode(encode, pt_angle)
 		// fmt.Println("pt_angle 된 각도 :", pt_angle)
@@ -117,7 +145,7 @@ func main() {
 
 		fmt.Println("Y 크기.", len(serialized_angle)) // >> 131406
 
-		fmt.Println("Y serialized_angle.", serialized_angle[len(serialized_angle)-10:]) // >> 131406
+		// fmt.Println("Y serialized_angle.", serialized_angle[len(serialized_angle)-20:]) // >> 131406
 		// ② TCP 송신
 		t3 := time.Now()
 		_, err = conn.Write([]byte(serialized_angle)) // 리스트 값을 문자열로 전송
@@ -144,7 +172,7 @@ func main() {
 		}
 		fmt.Printf("③ TCP 응답 수신 완료 (%v)\n", t6.Sub(t5))
 
-		fmt.Println("response .", response[len(serialized_angle)-10:]) // >> 131406
+		// fmt.Println("response .", response[len(serialized_angle)-20:]) // >> 131406
 
 		// 여기서 제어 입력 받는 부분 데이터처리리
 		ct_U := rlwe.NewCiphertext(params, params.MaxLevel())
@@ -157,32 +185,35 @@ func main() {
 		// fmt.Println("ct_U 받은거 확인:", ct_U)
 
 		dec_U := decryptor.DecryptNew(ct_U)
+		// dec_angle := decryptor.DecryptNew(ct_angle)
 
 		// 디코딩된 값 저장할 슬라이스 준비
-		decoded := make([]uint64, 1) // slots는 사용하는 슬롯 수 (예: 10)
-
+		decoded := make([]int64, 1) // slots는 사용하는 슬롯 수 (예: 10)
+		// decoded_angle := make([]int64, 1)
 		// 디코딩 실행 (in-place)
 		encoder.Decode(dec_U, decoded)
+		// encoder.Decode(dec_angle, decoded_angle)
 
 		// fmt.Println("dec_U 계산 결과:", dec_U)
 
 		// 제어 입력의 첫 번째 값 사용
 		// pwm_u := int16(decoded[0])
 
-		fmt.Println("pwm_u 계산 결과:", decoded)
+		fmt.Println("PID 계산 결과:", decoded)
 
-		// // ④ 시리얼 송신
-		// t7 := time.Now()
-		// _, err = port.Write([]byte(response + "\n"))
-		// t8 := time.Now()
-		// if err != nil {
-		// 	fmt.Println("아두이노로 전송 실패:", err)
-		// 	break
-		// }
-		// fmt.Printf("④ 시리얼 송신 완료 (%v)\n", t8.Sub(t7))
-		// fmt.Println("PWM/Dir 전송:", response)
+		pwm_u := float64(decoded[0]) * r // 여기서 decoded는 int지만 pwm_u는 float가 되어야함
 
-		time.Sleep(1000 * time.Millisecond)
+		// PWM 값 송신
+		t7 := time.Now()
+		_, err = port.Write([]byte(fmt.Sprintf("%d,%d\n", int(pwm_u), 1))) // PWM과 방향을 시리얼로 전송
+		t8 := time.Now()
+		if err != nil {
+			fmt.Println("아두이노로 전송 실패:", err)
+			break
+		}
+		fmt.Printf("④ 시리얼 송신 완료 (%v)\n", t8.Sub(t7))
+
+		time.Sleep(10 * time.Millisecond)
 
 		loopElapsed := time.Since(loopStart)
 		fmt.Printf("총 루프 처리 시간: %v\n", loopElapsed)

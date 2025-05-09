@@ -74,7 +74,7 @@ void loop() {
     stopMotor();
   }
 
-  delay(50);
+  delay(10);
 }
 
 void updateEncoder() {
