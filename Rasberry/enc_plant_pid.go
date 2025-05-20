@@ -102,34 +102,29 @@ func main() {
 		fmt.Println(">>", line)
 
 		line = strings.TrimSpace(line)
-		if line == "" || !strings.Contains(line, ",") {
-			continue
-		}
-		fmt.Printf("① 시리얼 수신 완료 (%v)\n", t2.Sub(t1))
-		fmt.Println("받은 데이터 (Angle, Distance):", line)
-
-		// 문자열을 쉼표로 분리
-		parts := strings.Split(line, ",")
-		if len(parts) != 2 {
-			fmt.Println("파싱 오류: 예상 형식 'angle,distance'")
+		if line == "" {
 			continue
 		}
 
-		// 문자열을 float64로 변환
-		angle, err := strconv.ParseFloat(parts[0], 64)
+		// 콤마가 포함되어 있으면 무시 (예전 형식 대비)
+		if strings.Contains(line, ",") {
+			fmt.Println("무시됨 (콤마 포함):", line)
+			continue
+		}
+
+		// angle 값만 파싱
+		angle, err := strconv.ParseFloat(line, 64)
 		if err != nil {
 			fmt.Println("Angle 파싱 실패:", err)
 			continue
 		}
-		// distance, err := strconv.ParseFloat(parts[1], 64)
-		// if err != nil {
-		// 	fmt.Println("Distance 파싱 실패:", err)
-		// 	continue
-		// }
+
+		fmt.Printf("① 시리얼 수신 완료 (%v)\n", t2.Sub(t1))
+		fmt.Println("받은 데이터 (Angle):", angle)
 
 		// 여기서 암호화
 		quantized_angle := math.Round((1 / r) * angle)
-		fmt.Println("양자화 된 각도 :", quantized_angle)
+		fmt.Println("양자화 된 각도:", quantized_angle)
 
 		encode := make([]int64, 1)
 		encode[0] = int64(quantized_angle)
@@ -213,7 +208,7 @@ func main() {
 		}
 		fmt.Printf("④ 시리얼 송신 완료 (%v)\n", t8.Sub(t7))
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 
 		loopElapsed := time.Since(loopStart)
 		fmt.Printf("총 루프 처리 시간: %v\n", loopElapsed)
