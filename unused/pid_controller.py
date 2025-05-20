@@ -6,7 +6,7 @@ import tty
 import termios
 
 # 시리얼 포트 설정
-ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
 time.sleep(2)
 
 # PID 파라미터
@@ -27,26 +27,33 @@ print("Press 'r' to reset encoder. Ctrl+C to quit.\n")
 try:
     while True:
         if ser.in_waiting:
-            line = ser.readline().decode().strip()
-            if line:
-                parts = line.split(',')
-                if len(parts) == 2:
-                    angle = float(parts[0])
-                    distance = float(parts[1])
+            # 버퍼 내 모든 데이터 읽기
+            raw_data = ser.read(ser.in_waiting).decode(errors='ignore')
+            lines = raw_data.strip().split('\n')
+            if lines:
+                last_line = lines[-1].strip()
+                if last_line:
+                    parts = last_line.split(',')
+                    if len(parts) == 2:
+                        try:
+                            angle = float(parts[0])
+                            distance = float(parts[1])
 
-                    error = angle - target
-                    integral += error
-                    derivative = error - prev_error
-                    prev_error = error
+                            error = angle - target
+                            integral += error
+                            derivative = error - prev_error
+                            prev_error = error
 
-                    output = (Kp * error) + (Ki * integral) + (Kd * derivative)
-                    pwm = int(min(255, abs(output)))
-                    direction = 1 if output > 0 else 0
+                            output = (Kp * error) + (Ki * integral) + (Kd * derivative)
+                            pwm = int(min(255, abs(output)))
+                            direction = 1 if output > 0 else 0
 
-                    command = f"{pwm},{direction}\n"
-                    ser.write(command.encode())
+                            command = f"{pwm},{direction}\n"
+                            ser.write(command.encode())
 
-                    print(f"Angle: {angle:.2f}° | Distance: {distance:.2f} cm | PWM: {pwm} | Dir: {direction}")
+                            print(f"Angle: {angle:.2f}° | Distance: {distance:.2f} cm | PWM: {pwm} | Dir: {direction}")
+                        except ValueError:
+                            print(f"[Warning] Could not convert data to float: {last_line}")
 
         # r 키 입력 감지 (즉시 반응)
         if select.select([sys.stdin], [], [], 0)[0]:
@@ -55,7 +62,7 @@ try:
                 ser.write(b"reset\n")
                 print(">>> Encoder reset requested.")
 
-        time.sleep(0.01)
+        time.sleep(0.001)
 
 except KeyboardInterrupt:
     print("\nExiting...")

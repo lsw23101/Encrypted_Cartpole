@@ -1,0 +1,85 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"math"
+	"net"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func main() {
+	// listener, err := net.Listen("tcp", "192.168.0.5:8080") 지우면 안됨 !!
+	listener, err := net.Listen("tcp", "127.0.0.1:8080")
+	if err != nil {
+		fmt.Println("TCP 리스너 실패:", err)
+		return
+	}
+	defer listener.Close()
+	fmt.Println("PID 서버 실행 중")
+
+	conn, err := listener.Accept()
+	if err != nil {
+		fmt.Println("연결 수락 실패:", err)
+		return
+	}
+	defer conn.Close()
+	fmt.Println("클라이언트 연결됨")
+
+	// PID 게인 설정
+	Kp := 20.0
+	Ki := 0.0
+	Kd := 40.0
+	setpoint := 0.0
+	var integral, prevError float64
+
+	reader := bufio.NewReader(conn)
+
+	for {
+		start := time.Now()
+
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("데이터 수신 실패:", err)
+			break
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// 각도값 하나만 받음
+		angle, err := strconv.ParseFloat(line, 64)
+		if err != nil {
+			fmt.Println("각도 파싱 실패:", err)
+			continue
+		}
+
+		// PID 연산
+		error := angle - setpoint
+		integral += error
+		derivative := error - prevError
+		prevError = error
+
+		output := Kp*error + Ki*integral + Kd*derivative
+		pwm := int(math.Min(255, math.Abs(output)))
+		dir := 0
+		if output > 0 {
+			dir = 1
+		}
+
+		response := fmt.Sprintf("%d,%d", pwm, dir)
+		_, err = conn.Write([]byte(response + "\n"))
+		if err != nil {
+			fmt.Println("응답 전송 실패:", err)
+			break
+		}
+
+		fmt.Printf("받은 각도: %.2f -> PWM: %d | Dir: %d\n", angle, pwm, dir)
+
+		elapsed := time.Since(start)
+		fmt.Printf("루프 처리 시간: %v\n", elapsed)
+	}
+}
