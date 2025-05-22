@@ -13,50 +13,16 @@ import (
 )
 
 func main() {
-	listener, err := net.Listen("tcp", "192.168.0.5:8080") // 내부 통신으로 변경
-	// listener, err := net.Listen("tcp", "127.0.0.1:8080") // 내부 통신으로 변경
-	if err != nil {
-		fmt.Println("TCP 리스너 실패:", err)
-		return
-	}
-	defer listener.Close()
-	fmt.Println("PID 서버 실행 중")
-
-	conn, err := listener.Accept()
-	if err != nil {
-		fmt.Println("연결 수락 실패:", err)
-		return
-	}
-	defer conn.Close()
-	fmt.Println("클라이언트 연결됨")
-
-	// PID 게인 설정
-	Kp := 20
-	// Ki := 0.0
-	// Kd := 40.0
-	// setpoint := 0.0
-	// var integral, prevError float64
-
-	// reader := bufio.NewReader(conn)
-
-	// log2 of polynomial degree
+	// ====== 암호화 파라미터 초기화 ======
 	logN := 12
-	// Choose the size of plaintext modulus (2^ptSize)
 	ptSize := uint64(28)
-	// Choose the size of ciphertext modulus (2^ctSize)
 	ctSize := int(74)
 
-	// ============== Encryption settings ==============
-	// Search a proper prime to set plaintext modulus
 	primeGen := ring.NewNTTFriendlyPrimesGenerator(ptSize, uint64(math.Pow(2, float64(logN)+1)))
 	ptModulus, _ := primeGen.NextAlternatingPrime()
 	fmt.Println("Plaintext modulus:", ptModulus)
 
-	// Create a chain of ciphertext modulus
 	logQ := []int{int(math.Floor(float64(ctSize) * 0.5)), int(math.Ceil(float64(ctSize) * 0.5))}
-
-	// Parameters satisfying 128-bit security
-	// BGV scheme is used
 	params, _ := bgv.NewParametersFromLiteral(bgv.ParametersLiteral{
 		LogN:             logN,
 		LogQ:             logQ,
@@ -64,50 +30,61 @@ func main() {
 	})
 
 	eval := bgv.NewEvaluator(params, nil)
+	Kp := 20
 
-	Ycin := rlwe.NewCiphertext(params, params.MaxLevel())
+	// ====== TCP 서버 리스닝 ======
+	listener, err := net.Listen("tcp", "192.168.0.5:8080")
+	if err != nil {
+		fmt.Println("TCP 리스너 실패:", err)
+		return
+	}
+	defer listener.Close()
+	fmt.Println("PID 서버 실행 중 (클라이언트 반복 접속 가능)")
 
 	for {
-		start := time.Now() // 루프 시작 시간
-		fmt.Printf("시작시간: %v\n", time.Since(start))
-		// 플랜트 출력을 담을 cipher message
-
-		// 여기서 131406은 파라미터로 설정한 q값에 따른 ct의 바이너리 크기
-		totalData, err := com_utils.ReadFullData(conn, 131406)
+		fmt.Println("클라이언트 대기 중...")
+		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Ycin 데이터 수신 실패:", err)
-			return
+			fmt.Println("연결 수락 실패:", err)
+			continue
 		}
-		fmt.Printf("데이터 받음: %v\n", time.Since(start))
+		fmt.Println("클라이언트 연결됨:", conn.RemoteAddr())
 
-		err = Ycin.UnmarshalBinary(totalData[:131406])
-		if err != nil {
-			// 오류 로그 출력
-			fmt.Println("Ciphertext 역직렬화 실패:", err)
-			return
+		Ycin := rlwe.NewCiphertext(params, params.MaxLevel())
+
+		for {
+			start := time.Now()
+
+			totalData, err := com_utils.ReadFullData(conn, 131406)
+			if err != nil {
+				fmt.Println("Ycin 데이터 수신 실패. 클라이언트 연결 종료:", err)
+				break // 내부 루프 탈출 -> 새 클라이언트 대기
+			}
+
+			err = Ycin.UnmarshalBinary(totalData[:131406])
+			if err != nil {
+				fmt.Println("Ciphertext 역직렬화 실패:", err)
+				break
+			}
+
+			Uout, _ := eval.MulNew(Ycin, Kp)
+
+			serialized_Uout, err := Uout.MarshalBinary()
+			if err != nil {
+				fmt.Println("직렬화 실패:", err)
+				break
+			}
+
+			_, err = conn.Write(serialized_Uout)
+			if err != nil {
+				fmt.Println("출력값 전송 실패:", err)
+				break
+			}
+
+			fmt.Printf("루프 처리 시간: %v\n", time.Since(start))
 		}
 
-		fmt.Printf("언마샬링: %v\n", time.Since(start))
-		//fmt.Println("Ycin :", Ycin)
-
-		Uout, _ := eval.MulNew(Ycin, Kp)
-		// 이건 나중에 P D 계산한거 MultAdd 함수로 구현하기
-		// Uout := Ycin // 일단 받은 값 그대로 보내기
-
-		//fmt.Println("Uout :", Uout)
-
-		fmt.Printf("P연산: %v\n", time.Since(start))
-		serialized_Uout, err := Uout.MarshalBinary() // 이런 식으로
-
-		// 컨트롤러의 제어 입력 계산 값은 바이너리 사이즈가 131406보다 커짐 196966
-		// fmt.Println("Uout 크기.", len(serialized_Uout))
-
-		_, err = conn.Write([]byte(serialized_Uout))
-		if err != nil {
-			fmt.Println("출력값 전송 실패:", err)
-			break
-		}
-
-		fmt.Printf("루프 처리 시간: %v\n", time.Since(start))
+		conn.Close()
+		fmt.Println("클라이언트와 연결 종료됨. 다음 연결 대기 중...\n")
 	}
 }
