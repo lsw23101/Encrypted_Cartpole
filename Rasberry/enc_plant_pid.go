@@ -23,18 +23,17 @@ func main() {
 		BaudRate: 115200,
 	}
 
-	port, err := serial.Open("COM4", mode) // 컴퓨터랑 연결할때 COM4에 연결
+	port, err := serial.Open("/dev/ttyACM0", mode)
 	if err != nil {
 		fmt.Println("아두이노와 실패:", err)
 		return
 	}
-	// defer port.Close() // 직접 닫을 예정
 
 	fmt.Println("포트 연결됨. 아두이노 리셋 대기 중...")
 	time.Sleep(1 * time.Second)
 
 	// TCP 클라이언트 연결
-	conn, err := net.Dial("tcp", "127.0.0.1:8080")
+	conn, err := net.Dial("tcp", "192.168.0.5:8080")
 	if err != nil {
 		fmt.Println("TCP 연결 실패:", err)
 		resetAndClosePort(port)
@@ -78,15 +77,6 @@ func main() {
 	for {
 		loopStart := time.Now()
 
-		// 루프 초반에 버퍼 비우기 (불필요한 이전 데이터 제거)
-		if err := port.ResetInputBuffer(); err != nil {
-			fmt.Println("입력 버퍼 초기화 실패:", err)
-		}
-		if err := port.ResetOutputBuffer(); err != nil {
-			fmt.Println("출력 버퍼 초기화 실패:", err)
-		}
-
-		// ① 시리얼에서 읽기 (여러 줄 올 수 있으니 마지막 줄만 처리)
 		line, err := serialReader.ReadString('\n')
 		if err != nil {
 			fmt.Println("읽기 오류:", err)
@@ -98,14 +88,12 @@ func main() {
 			continue
 		}
 
-		// 여러 줄이 들어왔다면 마지막 줄만 사용
 		lines := strings.Split(line, "\n")
 		lastLine := strings.TrimSpace(lines[len(lines)-1])
 		if lastLine == "" {
 			continue
 		}
 
-		// 콤마가 포함된 줄은 아두이노 각도 값이 아니므로 무시
 		if strings.Contains(lastLine, ",") {
 			fmt.Println("무시됨 (콤마 포함):", lastLine)
 			continue
@@ -117,45 +105,40 @@ func main() {
 			continue
 		}
 
-		fmt.Printf("① 시리얼 수신 완료 (마지막 줄) (%v 누적)\n", time.Since(loopStart))
+		serial_start := time.Now()
+		fmt.Printf("1. 시리얼 통신 시간: %v\n", time.Since(serial_start))
 		fmt.Println("받은 데이터 (Angle):", angle)
 
-		// 암호화 및 양자화
 		quantized_angle := math.Round((1 / r) * angle)
-		fmt.Println("양자화 된 각도:", quantized_angle)
-
 		encode := make([]int64, 1)
 		encode[0] = int64(quantized_angle)
 
 		encoder.Encode(encode, pt_angle)
 		ct_angle, _ := encryptor.EncryptNew(pt_angle)
 
+		enc_start := time.Now()
 		serialized_angle, err := ct_angle.MarshalBinary()
 		if err != nil {
 			fmt.Println("암호문 직렬화 실패:", err)
 			continue
 		}
+		fmt.Printf("\n2. 암호화 및 데이터 변환 시간: %v\n", time.Since(enc_start))
 
-		// fmt.Println("Y 크기:", len(serialized_angle))
-
-		fmt.Printf("데이터 후처리 (%v 누적)\n", time.Since(loopStart))
-
-		// ② TCP 송신
+		com_start := time.Now()
 		_, err = conn.Write(serialized_angle)
 		if err != nil {
 			fmt.Println("출력값 전송 실패:", err)
 			break
 		}
-		fmt.Printf("② TCP 전송 완료 (%v 누적)\n", time.Since(loopStart))
 
-		// ③ TCP 응답 수신
 		response, err := com_utils.ReadFullData(conn, 131406)
 		if err != nil {
 			fmt.Println("Uout 데이터 수신 실패:", err)
 			break
 		}
-		fmt.Printf("③ TCP 응답 수신 완료 (%v 누적)\n", time.Since(loopStart))
+		fmt.Printf("3. 암호 데이터의 TCP 송수신 시간: %v\n", time.Since(com_start))
 
+		dec_start := time.Now()
 		ct_U := rlwe.NewCiphertext(params, params.MaxLevel())
 		err = ct_U.UnmarshalBinary(response[:131406])
 		if err != nil {
@@ -168,32 +151,27 @@ func main() {
 		decoded := make([]int64, 1)
 		encoder.Decode(dec_U, decoded)
 
-		fmt.Println("PID 계산 결과:", decoded)
-
 		pwm_u := float64(decoded[0]) * r
+		fmt.Printf("4. 복호화 및 데이터 변환 시간: %v\n\n", time.Since(dec_start))
+		fmt.Println("제어기가 수행하는 연산 Kp * e = 20.0 * 각도")
+		fmt.Println("받은 제어 결과 :", pwm_u)
 
-		fmt.Printf("데이터 후처리(%v 누적)\n", time.Since(loopStart))
-		// PWM 값 송신
+		serial_2__start := time.Now()
 		_, err = port.Write([]byte(fmt.Sprintf("%d,%d\n", int(pwm_u), 1)))
 		if err != nil {
 			fmt.Println("아두이노로 전송 실패:", err)
 			break
 		}
-		fmt.Printf("④ 시리얼 송신 완료 (%v 누적)\n", time.Since(loopStart))
-
-		// 얘 시간이 아두이노가 보내주는 시간보다 훨씬 짧도록
-		// time.Sleep(1 * time.Millisecond)
+		fmt.Printf("\n5. 시리얼 송신 시간: %v\n", time.Since(serial_2__start))
 
 		loopElapsed := time.Since(loopStart)
 		fmt.Printf("총 루프 처리 시간: %v\n", loopElapsed)
 		fmt.Println("-----------------------------------")
 	}
 
-	// 루프 종료 시 포트 닫기 전에 버퍼 비우고 닫기
 	resetAndClosePort(port)
 }
 
-// 포트 버퍼 비우고 닫고 2초 대기하는 함수
 func resetAndClosePort(port serial.Port) {
 	fmt.Println("포트 버퍼 초기화 및 닫기 시작...")
 	if err := port.ResetInputBuffer(); err != nil {
@@ -207,7 +185,7 @@ func resetAndClosePort(port serial.Port) {
 		fmt.Println("포트 닫기 실패:", err)
 	} else {
 		fmt.Println("포트 닫음. 2초 대기...")
-		time.Sleep(2 * time.Second) // OS가 포트 해제할 시간 확보
+		time.Sleep(2 * time.Second)
 	}
 	fmt.Println("포트 정리 완료.")
 }

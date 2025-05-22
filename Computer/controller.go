@@ -102,8 +102,8 @@ func main() {
 
 	// 컨트롤러 소켓 연결설정
 
-	conn, err := net.Dial("tcp", "127.0.0.1:8080") // 서버에서 설정한 ip
-	// conn, err := net.Dial("tcp", "192.168.0.50:8080") // 연구실 라즈베리파이 ip
+	// conn, err := net.Dial("tcp", "127.0.0.1:8080") // 서버에서 설정한 ip
+	conn, err := net.Dial("tcp", "192.168.0.30:8080") // 연구실 라즈베리파이 ip
 	if err != nil {
 		fmt.Println("서버에 연결 실패:", err)
 		return

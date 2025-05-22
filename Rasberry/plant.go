@@ -140,19 +140,19 @@ func main() {
 
 	for i := 0; i < n; i++ {
 		ptY[i] = bgv.NewPlaintext(params, params.MaxLevel())
-		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, yy0vec[i])), params.PlaintextModulus()), ptY[i])
+		encoder.Encode(utils.ModVec(utils.RoundVec(utils.ScalVecMult(1/r, yy0vec[i])), params.PlaintextModulus()), ptY[i])
 		ctY[i], _ = encryptor.EncryptNew(ptY[i])
 
 		ptU[i] = bgv.NewPlaintext(params, params.MaxLevel())
-		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, uu0vec[i])), params.PlaintextModulus()), ptU[i])
+		encoder.Encode(utils.ModVec(utils.RoundVec(utils.ScalVecMult(1/r, uu0vec[i])), params.PlaintextModulus()), ptU[i])
 		ctU[i], _ = encryptor.EncryptNew(ptU[i])
 
 	}
 
 	// 통신 소켓 설정
 
-	listen, err := net.Listen("tcp", "192.168.0.30:8080") // 연구실 라즈베리파이 ip
-	// listen, err := net.Listen("tcp", "127.0.0.1:8080") //
+	// listen, err := net.Listen("tcp", "192.168.0.30:8080") // 연구실 라즈베리파이 ip
+	listen, err := net.Listen("tcp", "127.0.0.1:8080") //
 	if err != nil {
 		fmt.Println("서버 소켓 설정 실패:", err)
 		os.Exit(1)
@@ -196,7 +196,7 @@ func main() {
 
 		// Quantize and duplicate
 		// ARX 형태로 패킹하여 암호화
-		Ysens := utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(Y, m, h))), params.PlaintextModulus())
+		Ysens := utils.ModVec(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(Y, m, h))), params.PlaintextModulus())
 		Ypacked := bgv.NewPlaintext(params, params.MaxLevel())
 		encoder.Encode(Ysens, Ypacked)
 		Ycin, _ := encryptor.EncryptNew(Ypacked)
@@ -254,7 +254,7 @@ func main() {
 		fmt.Println("재암호화 하기 직전:", time.Since(startLoop))
 		// Re-encryption 재 암호화
 		Upacked := bgv.NewPlaintext(params, params.MaxLevel())
-		encoder.Encode(utils.ModVecFloat(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(U, m, h))), params.PlaintextModulus()), Upacked)
+		encoder.Encode(utils.ModVec(utils.RoundVec(utils.ScalVecMult(1/r, utils.VecDuplicate(U, m, h))), params.PlaintextModulus()), Upacked)
 		Ucin, _ := encryptor.EncryptNew(Upacked)
 
 		// 직렬화 후 송신

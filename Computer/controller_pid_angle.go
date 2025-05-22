@@ -11,7 +11,8 @@ import (
 )
 
 func main() {
-	// listener, err := net.Listen("tcp", "192.168.0.5:8080") 지우면 안됨 !!
+
+	// listener, err := net.Listen("tcp", "192.168.0.5:8080") // 지우면 안됨 !!
 	listener, err := net.Listen("tcp", "127.0.0.1:8080")
 	if err != nil {
 		fmt.Println("TCP 리스너 실패:", err)
