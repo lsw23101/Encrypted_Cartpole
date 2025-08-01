@@ -14,7 +14,7 @@ float ADCvalue = 0;
 float currentAngle = 0;
 const float ADCmin = 104.0;
 const float ADCmax = 919.0;
-const float ANGLE_OFFSET = 77.3 -1.73;
+const float ANGLE_OFFSET = 77.3 -1.73 + 33.5;
 
 double targetAngle = 0.0;
 double targetPosition = 0.0;
@@ -144,7 +144,7 @@ void loop()
 
   // ----------------------------------------------------- //
     // 1. ADC → 각도
-    ADCvalue = readFilteredADC(A0, 100);
+    ADCvalue = readFilteredADC(A1, 100);
     currentAngle = (ADCvalue - ADCmin) * 360.0 / (ADCmax - ADCmin);
     currentAngle = constrain(currentAngle, 0.0, 360.0);
 

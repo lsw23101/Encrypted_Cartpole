@@ -14,7 +14,7 @@ var lastTime time.Time
 // PID 계수
 const (
 	Kp = 34.0
-	Ki = 4.0
+	Ki = 2.0
 	Kd = 42.0
 
 	Lp = 40.0
