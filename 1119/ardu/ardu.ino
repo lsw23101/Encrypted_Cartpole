@@ -14,9 +14,9 @@ volatile long encoderCount = 0;
 // ---------------- 센서/보정 상수 ----------------
 float  ADCvalue      = 0.0f;
 float  currentAngle  = 0.0f;
-const float ADCmin   = 104.0f;
-const float ADCmax   = 919.0f;
-const float ANGLE_OFFSET = 180 -72.2; // 사용 중인 오프셋
+const float ADCmin   = 105.94f;
+const float ADCmax   = 911.50f;
+const float ANGLE_OFFSET = 180 -73.9; // 사용 중인 오프셋
 
 // ---------------- 타겟 ----------------
 double targetAngle    = 0.0; // 필요시 상위 시스템에서 추후 확장 가능 (현재는 0 기준)
@@ -121,7 +121,7 @@ void loop() {
 
     // ---------------- 센싱/전처리 (LPF 적용) ----------------
     // 1) ADC → 각도 (평균 필터 사용)
-    ADCvalue = readFilteredADC(A1, 100); // 시간 예산에 맞춰 sampleCount 조절 가능
+    ADCvalue = readFilteredADC(A1, 10); // 시간 예산에 맞춰 sampleCount 조절 가능
     currentAngle = (ADCvalue - ADCmin) * 360.0f / (ADCmax - ADCmin);
     currentAngle = constrain(currentAngle, 0.0f, 360.0f);
 
@@ -147,9 +147,9 @@ void loop() {
     y1_posError   = positionError;
 
     // 3) y 송신: "y0,y1\n" (소수 6자리)
-    Serial.print(y0_angleError, 6);
+    Serial.print(y0_angleError, 2);
     Serial.print(",");
-    Serial.println(y1_posError, 6);
+    Serial.println(y1_posError, 2);
 
     // ---------------- actuationDelay 창 내 u 수신 ----------------
     // 루프 시작 시각 기준 정확히 20ms 지연 내에서 u 1회만 수신 시도

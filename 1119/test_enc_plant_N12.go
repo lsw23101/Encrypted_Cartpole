@@ -25,7 +25,7 @@ import (
 
 // ===== 사용자 환경 설정 =====
 const (
-	addr       = "192.168.0.115:8080" // TCP 컨트롤러 주소
+	addr       = "192.168.20.133:8080" // TCP 컨트롤러 주소
 	serialPort = "/dev/ttyACM0"
 	baudRate   = 115200
 
