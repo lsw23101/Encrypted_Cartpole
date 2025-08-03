@@ -16,7 +16,7 @@ float  ADCvalue      = 0.0f;
 float  currentAngle  = 0.0f;
 const float ADCmin   = 104.0f;
 const float ADCmax   = 919.0f;
-const float ANGLE_OFFSET = 77.3 - 1.73 + 34.0 + 2.0; // 사용 중인 오프셋
+const float ANGLE_OFFSET = 180 -72.2; // 사용 중인 오프셋
 
 // ---------------- 타겟 ----------------
 double targetAngle    = 0.0; // 필요시 상위 시스템에서 추후 확장 가능 (현재는 0 기준)
