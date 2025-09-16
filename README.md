@@ -23,7 +23,7 @@ Requirment
 Go 설치하기
 
 인터넷 연결 > ifconfig 로 ip 확인 
-현재 컨트롤러용 pc 는 192.168.0.5 // 카트폴 : 192.168.0.30
+현재 컨트롤러용 pc 는 192.168.0.115 // 카트폴 : 192.168.0.30
 or
 127.0.0.1 로 설정해서 한 컴퓨터로 통신 시뮬레이션 돌려보기
 (이렇게 했을 시에는 통신 오류 X)
@@ -48,7 +48,7 @@ git clone https://github.com/lsw23101/Enc_control_RLWE
 
 plant와 controller 코드에서 ip 설정
 
-<terminal 1>
+<terminal 1, 라즈베리파이>
 ```
 cd ~/Rasberry
 ```
@@ -59,12 +59,14 @@ go run plant.go
 ```
 // 아두이노와 통신 파일
 ```
-go run controller_pid.go 
+go run ardu_to_rasp.go 
+```
+// 아두이노에서 받아서 pc와 TCP 통신까지 연삲
+```
+go run pc_to_rasp.go 
 ```
 
-
-
-<terminal 2>
+<terminal 2, 서버 PC>
 ```
 cd ~/Computer
 ```
@@ -73,13 +75,15 @@ cd ~/Computer
 ```
 go run controller.go
 ```
-// 아두이노와 통신 파일
+// 라즈베리 PID 연산 결과 통신 파일
 ```
-go run plant_pid.go 
+go run pc_to_rasp.go 
 ```
 
 Todo
 ====
+RGSW로 상태공간 모델 연산으로 변경해야할듯
+
 
 통신 환경에 따라 루프 당 걸리는 시간 변동이 심함 
 
