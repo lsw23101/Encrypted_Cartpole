@@ -12,7 +12,7 @@ float ADCvalue = 0;
 float currentAngle = 0;
 const float ADCmin = 104.0;
 const float ADCmax = 919.0;
-const float ANGLE_OFFSET = 110.7 - 26.1 - 10.2;
+const float ANGLE_OFFSET = 110.7 - 26.1 - 3.9;
 
 // 거리 계산
 const float wheelRadiusM = 0.04;
@@ -32,13 +32,17 @@ double angleControl = 0.0;
 
 // PID 제어 변수 (위치)
 double posTarget = 0.0, posError = 0.0;
-double posKp = 500.0, posKi = 0.0, posKd = 10.0;
+double posKp = 1.5, posKi = 0.0, posKd = 1.5;
 double posIntegral = 0.0, posPrevError = 0.0;
 double posControl = 0.0;
 
 // 실행 타이머
 unsigned long lastControlTime = 0;
-const unsigned long controlInterval = 10;
+const unsigned long controlInterval = 50;  // 내부 루프: 50ms (20Hz)
+
+unsigned long lastPositionUpdateTime = 0;
+const unsigned long positionUpdateInterval = 150;  // 외부 루프: 150ms (6.7Hz)
+
 bool isRunning = true;
 
 // 필터 함수
@@ -58,7 +62,7 @@ void setup() {
   pinMode(encoderPinA, INPUT_PULLUP);
   pinMode(encoderPinB, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(encoderPinA), updateEncoder, CHANGE);
-  Serial.println("Press 'r' to toggle the control loop.");
+  Serial.println("Press 'r' to toggle the control loop. 'f'/'b' to move forward/backward.");
 }
 
 void loop() {
@@ -68,6 +72,12 @@ void loop() {
       isRunning = !isRunning;
       if (!isRunning) stopMotor();
       Serial.println(isRunning ? "RUNNING" : "STOPPED");
+    }
+    else if (cmd == 'f') {
+      posTarget += 0.05;  // 5cm 전진
+    }
+    else if (cmd == 'b') {
+      posTarget -= 0.05;  // 5cm 후진
     }
   }
 
@@ -84,42 +94,42 @@ void loop() {
     // 위치 측정
     float position = getCartDistanceM();
 
-    // -------------------------
-    // 1. 각도 PID 계산
-    // -------------------------
+    // 외부 루프 (150ms마다 위치 PID 실행 → 각도 목표 갱신)
+    if (millis() - lastPositionUpdateTime >= positionUpdateInterval) {
+      lastPositionUpdateTime += positionUpdateInterval;
+
+      posError = posTarget - position;
+      posIntegral += posError;
+      double posDeriv = posError - posPrevError;
+      posPrevError = posError;
+
+      posControl = posKp * posError + posKi * posIntegral + posKd * posDeriv;
+
+      angleTarget = constrain(posControl, -0.3, 0.3);  // 라디안
+    }
+
+    // 내부 루프 (각도 제어)
     angleError = angleTarget - angle;
     angleIntegral += angleError;
+    angleIntegral = constrain(angleIntegral, -120, 120);
     double angleDeriv = angleError - anglePrevError;
     anglePrevError = angleError;
 
     angleControl = angleKp * angleError + angleKi * angleIntegral + angleKd * angleDeriv;
 
-    // -------------------------
-    // 2. 위치 PID 계산
-    // -------------------------
-    posError = posTarget - position;
-    posIntegral += posError;
-    double posDeriv = posError - posPrevError;
-    posPrevError = posError;
-
-    posControl = posKp * posError + posKi * posIntegral + posKd * posDeriv;
-
-    // -------------------------
-    // 3. 최종 제어 입력
-    // -------------------------
-    double controlSignal = angleControl + posControl;
+    // 모터 제어
+    double controlSignal = angleControl;
     int pwmValue = constrain(abs(controlSignal), 0, 255);
     moveMotor(pwmValue, controlSignal > 0);
 
-    // -------------------------
-    // 디버깅
-    // -------------------------
-    static unsigned long lastDebug = 0; 
+    // 디버깅 출력
+    static unsigned long lastDebug = 0;
     if (millis() - lastDebug > 200) {
       lastDebug = millis();
       Serial.print("Angle(deg): "); Serial.print(currentAngle, 2);
       Serial.print(" | Pos(m): "); Serial.print(position, 3);
-      Serial.print(" | u_total: "); Serial.print(controlSignal, 2);
+      Serial.print(" | TargetPos(m): "); Serial.print(posTarget, 3);
+      Serial.print(" | AngleTgt(rad): "); Serial.print(angleTarget, 3);
       Serial.print(" | PWM: "); Serial.println(pwmValue);
     }
   }
