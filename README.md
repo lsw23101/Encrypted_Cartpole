@@ -59,7 +59,7 @@ go run plant.go
 ```
 // 아두이노와 통신 파일
 ```
-go run ardu_to_rasp.go 
+go run rasp_to_pc.go 
 ```
 // 아두이노에서 받아서 pc와 TCP 통신까지 연삲
 ```
