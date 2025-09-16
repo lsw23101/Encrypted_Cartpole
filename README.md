@@ -4,6 +4,12 @@ Capstone_encryted_control
 
 Description
 ====
+<ardu_to_rasp, rasp_to_pc, pc_to_rasp>
+- 일단 PID를 realization 한 연산에 대하여 통신 구현
+
+
+<plant.go and controller.go>
+- Lattigo CDSL 라이브러리 두개로 나눈거 돌려보는 실행파일
 - 현재 한 루프에 30ms 이내 (프린트 문을 빼도 비슷함)
 - 한번씩 통신 오류 발생 (+ 한번씩 50ms 넘는 루프타임)
 - com_utils : 파일 읽고 쓰기 관련 함수
