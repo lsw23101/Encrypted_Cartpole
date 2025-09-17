@@ -19,7 +19,8 @@ import (
 
 // 반복 파라미터
 const (
-	addr     = "127.0.0.1:9000"
+	// addr     = "127.0.0.1:9000"
+	addr     = "192.168.0.115:8080"
 	numIters = 500
 	period   = 0 * time.Millisecond
 )
