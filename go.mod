@@ -1,4 +1,4 @@
-module Enc_control_RLWE
+module Encrypted_Cartpole
 
 go 1.23.4
 

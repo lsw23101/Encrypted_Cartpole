@@ -2,10 +2,15 @@ package com_utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"path/filepath"
+	"sort"
 
+	"github.com/tuneinsight/lattigo/v6/core/rgsw"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 )
 
@@ -100,6 +105,99 @@ func ReadFromFile(filename string, data interface{}) error {
 	}
 
 	return nil
+}
+
+// ====== 파일 유틸 헬퍼 추가 (main 아래 어딘가) ======
+// 디렉토리 보장
+func EnsureDir(dir string) error {
+	return os.MkdirAll(dir, 0o755)
+}
+
+// io.WriterTo 구현 타입 공통 저장
+func WriteWT(path string, obj io.WriterTo) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w := bufio.NewWriter(f)
+	if _, err := obj.WriteTo(w); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
+// io.ReaderFrom 구현 타입 공통 로드
+func ReadRT(path string, obj io.ReaderFrom) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	r := bufio.NewReader(f)
+	_, err = obj.ReadFrom(r)
+	return err
+}
+
+// RGSW pack (예: []*rgsw.Ciphertext) 저장
+func SaveRGSWPack(baseDir, name string, pack []*rgsw.Ciphertext) error {
+	if pack == nil {
+		return errors.New("nil pack: " + name)
+	}
+	for i, ct := range pack {
+		if ct == nil {
+			return errors.New("nil ciphertext in pack: " + name)
+		}
+		fn := filepath.Join(baseDir, fmt.Sprintf("%s_%03d.dat", name, i))
+		if err := WriteWT(fn, ct); err != nil {
+			return fmt.Errorf("save %s[%d] failed: %w", name, i, err)
+		}
+	}
+	return nil
+}
+
+// RGSW pack 로드 (ctName_000.dat, 001.dat ... 존재하는 만큼 읽음)
+func LoadRGSWPack(baseDir, name string) ([]*rgsw.Ciphertext, error) {
+	out := []*rgsw.Ciphertext{}
+	for i := 0; ; i++ {
+		fn := filepath.Join(baseDir, fmt.Sprintf("%s_%03d.dat", name, i))
+		if _, err := os.Stat(fn); err != nil {
+			if os.IsNotExist(err) {
+				break
+			}
+			return nil, err
+		}
+		ct := new(rgsw.Ciphertext)
+		if err := ReadRT(fn, ct); err != nil {
+			return nil, fmt.Errorf("load %s[%d] failed: %w", name, i, err)
+		}
+		out = append(out, ct)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no files found for %s_* in %s", name, baseDir)
+	}
+	return out, nil
+}
+
+// 저장해 둔 Galois keys 일괄 로드 (gk_*.dat)
+func LoadGaloisKeys(baseDir string) ([]*rlwe.GaloisKey, error) {
+	files, err := filepath.Glob(filepath.Join(baseDir, "gk_*.dat"))
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no gk_*.dat in %s", baseDir)
+	}
+	sort.Strings(files) // 파일명 순서대로
+	out := make([]*rlwe.GaloisKey, 0, len(files))
+	for _, fn := range files {
+		gk := new(rlwe.GaloisKey)
+		if err := ReadRT(fn, gk); err != nil {
+			return nil, fmt.Errorf("load %s failed: %w", fn, err)
+		}
+		out = append(out, gk)
+	}
+	return out, nil
 }
 
 // ReadAndParseSerial reads a line from the serial reader, and returns parsed angle and distance. 작동안함

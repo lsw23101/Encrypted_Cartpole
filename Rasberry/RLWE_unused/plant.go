@@ -3,7 +3,7 @@ package main
 // 데이터 받고 암호화 해서 보내기
 
 import (
-	"Enc_control_RLWE/com_utils"
+	"Encrypted_Cartpole/com_utils"
 	"fmt"
 	"math"
 	"net"
