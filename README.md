@@ -7,16 +7,18 @@ Description
 <ardu_to_rasp, rasp_to_pc, pc_to_rasp>
 - 일단 PID를 realization 한 연산에 대하여 통신 구현
 
+<plant_rgsw.go and controller_rgsw.go>
+- 앞서 구한 PID 상태공간 실현한 것 암호화 연산 나누기 성공
+- 재암호화의 필요가 없으므로 13ms 내외가 걸림 (RLWE보다 장점)
 
-<plant.go and controller.go>
-- Lattigo CDSL 라이브러리 두개로 나눈거 돌려보는 실행파일
-- 현재 한 루프에 30ms 이내 (프린트 문을 빼도 비슷함)
-- 한번씩 통신 오류 발생 (+ 한번씩 50ms 넘는 루프타임)
-- com_utils : 파일 읽고 쓰기 관련 함수
 
-- 아두이노 <<==시리얼통신==>> 라즈베리파이 <==TCP통신==>> 서버pc 환경은 완료
-- 각 위치의 plant_pid.go 와 controller_pid.go 실행으로 확인 (controller 먼저 실행)
-  
+~~<plant.go and controller.go>~~
+~~- Lattigo CDSL 라이브러리 두개로 나눈거 돌려보는 실행파일~~
+~~- 현재 한 루프에 30ms 이내 (프린트 문을 빼도 비슷함)~~
+~~- 한번씩 통신 오류 발생 (+ 한번씩 50ms 넘는 루프타임)~~
+~~- com_utils : 파일 읽고 쓰기 관련 함수~~
+
+
 
 Requirment
 =============
@@ -30,8 +32,12 @@ or
 
 Preliminary
 ===
-1. RLWE
-2. ARX form controller
+~~1. RLWE
+2. ARX form controller~~
+1. RGSW (New!)
+2. Discrete PID
+3. TCP communicate
+
 
 Usage
 =============
@@ -53,7 +59,7 @@ plant와 controller 코드에서 ip 설정
 cd ~/Rasberry
 ```
 
-// 암호 데이터 송수신 파일
+// 암호 상태공간 연산 통신
 ```
 go run plant_rgsw.go 
 ```
@@ -71,7 +77,7 @@ go run pc_to_rasp.go
 cd ~/PC
 ```
 
-// 암호 데이터 송수신 파일
+// 암호 상태공간 연산 통신
 ```
 go run controller_rgsw.go
 ```
@@ -82,17 +88,13 @@ go run pc_to_rasp.go
 
 Todo
 ====
-RGSW로 상태공간 모델 연산으로 변경해야할듯
+RGSW로 상태공간 모델 연산으로 변경해야할듯 <- 완료
 
-
-통신 환경에 따라 루프 당 걸리는 시간 변동이 심함 
+통신 환경에 따라 루프 당 걸리는 시간 변동이 심함 1
 
 중간에 통신 끊기는 상황 예외 처리
 
 코드 정리
-
-PID 아두이노 송수신 코드에서 암호화 적용
-
 
 N이 작을때의 원격 컨트롤러 구현해서 비밀 키 빼내는 부분 제작
 
