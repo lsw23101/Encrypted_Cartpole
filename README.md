@@ -20,12 +20,13 @@ Description
 ~~- com_utils : 파일 읽고 쓰기 관련 함수~~
 
 # 결과
-
+```
 PS C:\Users\sang2\all\Encrypted_Cartpole\Pc> go run .\controller_rgsw.go
 [Controller] Listening on 192.168.0.115:8080 ...  
 [Controller][AVG over 500] recv=5.340 ms, unpack=2.213 ms, computeU=2.256 ms, send=0.098 ms, update=2.204 ms, total=12.113 ms | bytes avg y=64.3 KB, avg u=64.3 KB  
 [Controller][AVG comm over 499 samples] send->nextRecv = 7.541 ms  
-[Controller] Done. (r,s,L) = 0.0001 0.0001 0.001 | m = 1  
+[Controller] Done. (r,s,L) = 0.0001 0.0001 0.001 | m = 1
+```
 send(Lattigo의 직렬화에 걸리는 비용), 역직렬화는 recv에 담김  
 
 통신 : 8ms (u 보내고 다음 y 받는데 까지 걸리는 시간. 즉, 플랜트의 암호화 등의 시간도 포함)  
