@@ -39,7 +39,7 @@ Usage
 
 
 ```
-git clone https://github.com/lsw23101/Enc_control_RLWE
+git clone https://github.com/lsw23101/Encrypted_Cartpole
 ```
 
 
