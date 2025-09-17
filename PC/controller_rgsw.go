@@ -17,10 +17,8 @@ import (
 	"github.com/tuneinsight/lattigo/v6/ring"
 )
 
-// 반복 파라미터
 const (
-	// addr     = "127.0.0.1:9000"
-	addr     = "192.168.0.115:8080"
+	addr     = "192.168.0.115:8080" // 서버 바인딩 주소
 	numIters = 500
 	period   = 0 * time.Millisecond
 )
@@ -39,6 +37,9 @@ func main() {
 	s := 1 / 10000.0
 	L := 1 / 1000.0
 	r := 1 / 10000.0
+	_ = s
+	_ = L
+	_ = r
 
 	// tau & monomials (EncPack/Unpack 셋업)
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
@@ -109,22 +110,36 @@ func main() {
 	rbuf := bufio.NewReader(conn)
 	wbuf := bufio.NewWriter(conn)
 
-	// ======== Timers (accumulators) ========
+	// ======== Accumulators (avg만 출력) ========
 	var sumRecv, sumUnpack, sumComputeU, sumSend, sumUpdate, sumIter time.Duration
+	var sumRecvBytes, sumSentBytes int64
+	var sumSendToNextRecv time.Duration // 이전 루프 send 완료 → 다음 루프 y 수신 완료까지
+	var commSamples int                 // 유효 표본 수 (최초 루프 제외)
 	itersDone := 0
 
-	// ======== Control loop ========
+	// 이전 루프의 send 완료 시각
+	var lastSendDone time.Time
+	var haveLastSend bool
+
 	for it := 0; it < numIters; it++ {
 		iterStart := time.Now()
 
-		// 1) receive y
+		// 1) receive y (ReadFrom 1회)
 		t := time.Now()
 		yCtPack := new(rlwe.Ciphertext)
-		if _, err := yCtPack.ReadFrom(rbuf); err != nil {
+		nRecv, err := yCtPack.ReadFrom(rbuf)
+		if err != nil {
 			log.Printf("[Controller] Read yCtPack err at iter %d: %v (stop)", it, err)
 			break
 		}
 		dRecv := time.Since(t)
+		sumRecvBytes += nRecv
+
+		// ★ 통신시간(컨트롤러 관점): 직전 루프에서 u를 다 보낸 시각 → 이번 루프에서 y를 다 받은 시각
+		if haveLastSend {
+			sumSendToNextRecv += time.Since(lastSendDone)
+			commSamples++
+		}
 
 		// 2) unpack x,y
 		t = time.Now()
@@ -139,9 +154,10 @@ func main() {
 		uCtPack = RLWE.Add(uCtPack, JyCt, zeroCt, params)
 		dComputeU := time.Since(t)
 
-		// 4) send u
+		// 4) send u (WriteTo 1회)
 		t = time.Now()
-		if _, err := uCtPack.WriteTo(wbuf); err != nil {
+		nSent, err := uCtPack.WriteTo(wbuf)
+		if err != nil {
 			log.Printf("[Controller] Write uCtPack err at iter %d: %v (stop)", it, err)
 			break
 		}
@@ -150,6 +166,11 @@ func main() {
 			break
 		}
 		dSend := time.Since(t)
+		sumSentBytes += nSent
+
+		// ★ 다음 루프 통신시간 계산을 위해, 이번 루프의 send 완료 시각 저장
+		lastSendDone = time.Now()
+		haveLastSend = true
 
 		// 5) update x = F*x + G*y
 		t = time.Now()
@@ -168,28 +189,35 @@ func main() {
 		sumIter += dIter
 		itersDone++
 
-		// per-iter 로그 (원하면 주석 해제)
-		fmt.Printf(
-			"[Controller] iter=%d | recv=%.3f ms, unpack=%.3f ms, computeU=%.3f ms, send=%.3f ms, update=%.3f ms, total=%.3f ms\n",
-			it, ms(dRecv), ms(dUnpack), ms(dComputeU), ms(dSend), ms(dUpdate), ms(dIter),
-		)
-
 		if period > 0 {
 			time.Sleep(period)
 		}
 	}
 
+	// ======== 평균만 출력 ========
 	if itersDone > 0 {
-		fmt.Printf(
-			"[Controller][AVG over %d iters] recv=%.3f ms, unpack=%.3f ms, computeU=%.3f ms, send=%.3f ms, update=%.3f ms, total=%.3f ms\n",
-			itersDone,
-			ms(sumRecv)/float64(itersDone),
-			ms(sumUnpack)/float64(itersDone),
-			ms(sumComputeU)/float64(itersDone),
-			ms(sumSend)/float64(itersDone),
-			ms(sumUpdate)/float64(itersDone),
-			ms(sumIter)/float64(itersDone),
-		)
+		avgRecv := ms(sumRecv) / float64(itersDone)
+		avgUnpack := ms(sumUnpack) / float64(itersDone)
+		avgComputeU := ms(sumComputeU) / float64(itersDone)
+		avgSend := ms(sumSend) / float64(itersDone)
+		avgUpdate := ms(sumUpdate) / float64(itersDone)
+		avgTotal := ms(sumIter) / float64(itersDone)
+
+		avgYKB := float64(sumRecvBytes) / float64(itersDone) / 1024.0
+		avgUKB := float64(sumSentBytes) / float64(itersDone) / 1024.0
+
+		var avgSendToNextRecv float64
+		if commSamples > 0 {
+			avgSendToNextRecv = ms(sumSendToNextRecv) / float64(commSamples)
+		}
+
+		fmt.Printf("[Controller][AVG over %d] recv=%.3f ms, unpack=%.3f ms, computeU=%.3f ms, send=%.3f ms, update=%.3f ms, total=%.3f ms | bytes avg y=%.1f KB, avg u=%.1f KB\n",
+			itersDone, avgRecv, avgUnpack, avgComputeU, avgSend, avgUpdate, avgTotal, avgYKB, avgUKB)
+
+		// 컨트롤러 관점의 통신시간(이전 send 완료 → 다음 y 수신 완료)
+		if commSamples > 0 {
+			fmt.Printf("[Controller][AVG comm over %d samples] send->nextRecv = %.3f ms\n", commSamples, avgSendToNextRecv)
+		}
 	}
 
 	fmt.Println("[Controller] Done. (r,s,L) =", r, s, L, "| m =", m)
