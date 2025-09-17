@@ -55,7 +55,7 @@ cd ~/Rasberry
 
 // 암호 데이터 송수신 파일
 ```
-go run plant.go 
+go run plant_rgsw.go 
 ```
 // 아두이노와 통신 파일
 ```
@@ -68,12 +68,12 @@ go run pc_to_rasp.go
 
 <terminal 2, 서버 PC>
 ```
-cd ~/Computer
+cd ~/PC
 ```
 
 // 암호 데이터 송수신 파일
 ```
-go run controller.go
+go run controller_rgsw.go
 ```
 // 라즈베리 PID 연산 결과 통신 파일
 ```
