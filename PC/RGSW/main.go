@@ -76,8 +76,8 @@ func main() {
 	p := len(G[0])
 
 	// ============== Quantization parameters ==============
-	s := 1 / 10000.0
-	L := 1 / 1000.0
+	s := 1 / 1.0
+	L := 1 / 100000.0
 	r := 1 / 10000.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v \n", 1/L, 1/s, 1/r)
 
@@ -170,7 +170,7 @@ func main() {
 
 	x := x_ini
 	for i := 0; i < iter; i++ {
-		y := []float64{0.001, 0.001} // fixed step input
+		y := []float64{1.0, 0.0} // fixed step input
 		u := utils.VecAdd(
 			utils.MatVecMult(H, x),
 			utils.MatVecMult(J, y),
@@ -193,7 +193,7 @@ func main() {
 	startPeriod := make([]time.Time, iter)
 
 	for i := 0; i < iter; i++ {
-		y := []float64{0.001, 0.001}
+		y := []float64{1.0, 0.0}
 		startPeriod[i] = time.Now()
 
 		// Encrypt y

@@ -73,8 +73,8 @@ func main() {
 	p := len(G[0])
 
 	// ============== Quantization parameters ==============
-	s := 1 / 10000.0
-	L := 1 / 1000.0
+	s := 1 / 1.0
+	L := 1 / 100000.0
 	r := 1 / 10000.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v \n", 1/L, 1/s, 1/r)
 
