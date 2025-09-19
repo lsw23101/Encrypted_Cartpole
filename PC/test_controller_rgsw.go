@@ -7,7 +7,9 @@ import (
 	"log"
 	"math"
 	"net"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	RGSW "github.com/CDSL-EncryptedControl/CDSL/utils/core/RGSW"
@@ -18,7 +20,7 @@ import (
 )
 
 const (
-	// addr     = "192.168.0.115:8080" // 서버 바인딩 주소
+	// addr     = "192.168.0.115:8080"
 	addr     = "127.0.0.1:9000" // 컨트롤러 주소
 	numIters = 0                // 0 means infinite loop
 	period   = 0 * time.Millisecond
@@ -94,6 +96,7 @@ func main() {
 	evaluatorRLWE := rlwe.NewEvaluator(params, evkRLWE)
 
 	zeroCt := rlwe.NewCiphertext(params, 1)
+	_ = zeroCt
 
 	// ======== TCP server ========
 	ln, err := net.Listen("tcp", addr)
@@ -111,6 +114,27 @@ func main() {
 	rbuf := bufio.NewReader(conn)
 	wbuf := bufio.NewWriter(conn)
 
+	// ======== Keyboard toggle goroutine ========
+	toggleCh := make(chan struct{}, 1)
+	go func() {
+		sc := bufio.NewScanner(os.Stdin)
+		for sc.Scan() {
+			txt := strings.TrimSpace(sc.Text())
+			if strings.EqualFold(txt, "r") {
+				select {
+				case toggleCh <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+
+	// ======== State ========
+	running := false       // 처음엔 대기
+	pendingToggle := false // 다음 사이클에서 r을 보낼지 여부
+
+	fmt.Println("[Controller] Ready. Type 'r' + Enter to START/STOP.")
+
 	// ======== Accumulators (avg만 출력) ========
 	var sumRecv, sumUnpack, sumComputeU, sumSend, sumUpdate, sumIter time.Duration
 	var sumRecvBytes, sumSentBytes int64
@@ -125,6 +149,19 @@ func main() {
 	for it := 0; it < numIters; it++ {
 		iterStart := time.Now()
 
+		// --- 키보드 토글 입력 확인(논블로킹) ---
+		select {
+		case <-toggleCh:
+			running = !running
+			pendingToggle = true // 이번 사이클에서 'r\n'을 먼저 보냄
+			state := "RUN"
+			if !running {
+				state = "STOP"
+			}
+			fmt.Printf("[Controller] Toggle -> %s (will send 'r' this cycle)\n", state)
+		default:
+		}
+
 		// 1) receive y (ReadFrom 1회)
 		t := time.Now()
 		yCtPack := new(rlwe.Ciphertext)
@@ -136,10 +173,40 @@ func main() {
 		dRecv := time.Since(t)
 		sumRecvBytes += nRecv
 
-		// ★ 통신시간(컨트롤러 관점): 직전 루프에서 u를 다 보낸 시각 → 이번 루프에서 y를 다 받은 시각
+		// ★ 통신시간(컨트롤러 관점)
 		if haveLastSend {
 			sumSendToNextRecv += time.Since(lastSendDone)
 			commSamples++
+		}
+
+		// === 토글 신호가 걸린 사이클이면: 암호문 대신 'r\n' 전송 ===
+		if pendingToggle {
+			if _, err := wbuf.WriteString("r\n"); err != nil {
+				log.Printf("[Controller] Write 'r' err at iter %d: %v (stop)", it, err)
+				break
+			}
+			if err := wbuf.Flush(); err != nil {
+				log.Printf("[Controller] Flush after 'r' err at iter %d: %v (stop)", it, err)
+				break
+			}
+			fmt.Printf("[Controller] iter=%d | sent 'r' to plant (running=%v)\n", it, running)
+
+			// 이번 사이클은 u 암호문 전송/업데이트 생략
+			pendingToggle = false
+			lastSendDone = time.Now()
+			haveLastSend = true
+
+			// 통계 누적(보낸 바이트 수는 줄바꿈 2바이트 정도지만 KB 평균에 큰 영향 없음)
+			sumSentBytes += 2
+
+			// 주기 제어
+			if period > 0 {
+				time.Sleep(period)
+			}
+			itersDone++
+			sumRecv += dRecv
+			sumIter += time.Since(iterStart)
+			continue
 		}
 
 		// 2) unpack x,y
@@ -152,7 +219,7 @@ func main() {
 		t = time.Now()
 		uCtPack := RGSW.MultPack(xCt, ctH, evaluatorRGSW, ringQ, params)
 		JyCt := RGSW.MultPack(yCt, ctJ, evaluatorRGSW, ringQ, params)
-		uCtPack = RLWE.Add(uCtPack, JyCt, zeroCt, params)
+		uCtPack = RLWE.Add(uCtPack, JyCt, rlwe.NewCiphertext(params, 1), params)
 		dComputeU := time.Since(t)
 
 		// 4) send u (WriteTo 1회)
@@ -177,7 +244,7 @@ func main() {
 		t = time.Now()
 		FxCt := RGSW.MultPack(xCt, ctF, evaluatorRGSW, ringQ, params)
 		GyCt := RGSW.MultPack(yCt, ctG, evaluatorRGSW, ringQ, params)
-		recoveredX = RLWE.Add(FxCt, GyCt, zeroCt, params)
+		recoveredX = RLWE.Add(FxCt, GyCt, rlwe.NewCiphertext(params, 1), params)
 		dUpdate := time.Since(t)
 
 		dIter := time.Since(iterStart)
@@ -215,7 +282,6 @@ func main() {
 		fmt.Printf("[Controller][AVG over %d] recv=%.3f ms, unpack=%.3f ms, computeU=%.3f ms, send=%.3f ms, update=%.3f ms, total=%.3f ms | bytes avg y=%.1f KB, avg u=%.1f KB\n",
 			itersDone, avgRecv, avgUnpack, avgComputeU, avgSend, avgUpdate, avgTotal, avgYKB, avgUKB)
 
-		// 컨트롤러 관점의 통신시간(이전 send 완료 → 다음 y 수신 완료)
 		if commSamples > 0 {
 			fmt.Printf("[Controller][AVG comm over %d samples] send->nextRecv = %.3f ms\n", commSamples, avgSendToNextRecv)
 		}
