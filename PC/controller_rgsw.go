@@ -20,7 +20,7 @@ import (
 const (
 	// addr     = "192.168.0.115:8080" // 서버 바인딩 주소
 	addr     = "127.0.0.1:9000" // 컨트롤러 주소
-	numIters = 0                // 0 means infinite loop
+	numIters = 500                // 0 means infinite loop
 	period   = 0 * time.Millisecond
 )
 
@@ -122,7 +122,8 @@ func main() {
 	var lastSendDone time.Time
 	var haveLastSend bool
 
-	for it := 0; it < numIters; it++ {
+	// for it := 0; it < numIters; it=++ {
+	for it := 0; ; it=it { // 무한루프
 		iterStart := time.Now()
 
 		// 1) receive y (ReadFrom 1회)

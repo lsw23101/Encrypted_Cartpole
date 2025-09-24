@@ -138,91 +138,87 @@ func main() {
 	sc.Buffer(make([]byte, 0, 256), 1024)
 	fmt.Println("[Combined] Serial opened:", serialPort, baudRate)
 
-	iter := 0
-	for {
-		// 1) Arduino에서 한 줄 읽기
-		if !sc.Scan() {
-			if err := sc.Err(); err != nil {
-				log.Printf("[Combined] Serial scan error: %v", err)
-			} else {
-				log.Printf("[Combined] Serial EOF")
-			}
+	paused := false
+iter := 0
+for {
+    // 1) Arduino에서 한 줄 읽기
+    if !sc.Scan() {
+        if err := sc.Err(); err != nil {
+            log.Printf("[Combined] Serial scan error: %v", err)
+        } else {
+            log.Printf("[Combined] Serial EOF")
+        }
+        break
+    }
+    line := sc.Text()
+
+    y0, y1, err := parseTwoFloats(line)
+    if err != nil {
+        log.Printf("[Combined] skip bad line: %v", err)
+        continue
+    }
+    y := []float64{y0, y1}
+
+    // 양자화 -> EncPack
+    yBar := utils.RoundVec(utils.ScalVecMult(1.0/r, y))
+    yCtPack := RLWE.EncPack(yBar, tau, 1.0/L, *encryptor, ringQ, params)
+
+    // 컨트롤러로 암호문 송신
+    if _, err := yCtPack.WriteTo(wbuf); err != nil {
+        log.Printf("[Combined] Write yCtPack err at iter %d: %v", iter, err)
+        break
+    }
+    if err := wbuf.Flush(); err != nil {
+        log.Printf("[Combined] Flush err at iter %d: %v", iter, err)
+        break
+    }
+
+    // 🔎 2) 컨트롤러 토글 신호 확인
+    if toggle, _ := readControllerToggleIfAny(rbuf); toggle {
+        paused = !paused
+        if paused {
+            fmt.Println("[Combined] Received PAUSE → stop loop, send u=0")
+        } else {
+            fmt.Println("[Combined] Received RESUME → resume loop")
+        }
+    }
+
+    if paused {
+        // 멈춘 상태에서는 u=0만 아두이노로 보냄
+		if _, err := port.Write([]byte("r\n")); err != nil {
+			log.Printf("[Combined] Serial send 'r' err at iter %d: %v", iter, err)
 			break
 		}
-		line := sc.Text()
+        time.Sleep(100 * time.Millisecond)
+        continue
+    }
 
-		// 2) 라인에서 y0,y1 파싱 (비정상 라인은 건너뜀)
-		y0, y1, err := parseTwoFloats(line)
-		if err != nil {
-			log.Printf("[Combined] skip bad line: %v", err)
-			continue
-		}
-		y := []float64{y0, y1}
+    // 3) 컨트롤러에서 제어입력 암호문 u 수신
+    uCtPack := new(rlwe.Ciphertext)
+    if _, err := uCtPack.ReadFrom(rbuf); err != nil {
+        log.Printf("[Combined] Read uCtPack err at iter %d: %v", iter, err)
+        break
+    }
 
-		// 3) 양자화 -> EncPack
-		yBar := utils.RoundVec(utils.ScalVecMult(1.0/r, y))
-		yCtPack := RLWE.EncPack(yBar, tau, 1.0/L, *encryptor, ringQ, params)
+    // 4) 복호 & 스케일 되돌림
+    uVec := RLWE.DecUnpack(uCtPack, m, tau, *decryptor, r*s*s*L, ringQ, params)
+    u := 0.0
+    if len(uVec) > 0 {
+        u = uVec[0]
+    }
 
-		// 4) 컨트롤러로 암호문 송신
-		if _, err := yCtPack.WriteTo(wbuf); err != nil {
-			log.Printf("[Combined] Write yCtPack err at iter %d: %v", iter, err)
-			break
-		}
-		if err := wbuf.Flush(); err != nil {
-			log.Printf("[Combined] Flush err at iter %d: %v", iter, err)
-			break
-		}
+    // 5) Arduino로 제어입력 송신
+    if _, err := port.Write([]byte(fmt.Sprintf("%.6f\n", u))); err != nil {
+        log.Printf("[Combined] Serial write err at iter %d: %v", iter, err)
+        break
+    }
 
-		// 4.5) 컨트롤러에서 토글 신호(r/R)가 왔는지 먼저 확인
-		if toggle, err := readControllerToggleIfAny(rbuf); err != nil {
-			log.Printf("[Combined] Peek/Read toggle err at iter %d: %v", iter, err)
-			break
-		} else if toggle {
-			// 아두이노로 r 전달 + 즉시 u=0 한 번 보내 모터 off
-			if _, err := port.Write([]byte("r\n")); err != nil {
-				log.Printf("[Combined] Serial send 'r' err at iter %d: %v", iter, err)
-				break
-			}
-			if _, err := port.Write([]byte("0\n")); err != nil {
-				log.Printf("[Combined] Serial write 0 after 'r' err at iter %d: %v", iter, err)
-				break
-			}
-			fmt.Printf("[Combined] iter=%d | controller sent 'r' -> forwarded to Arduino and set u=0\n", iter)
+    fmt.Printf("[Combined] iter=%d | y=[%.6f %.6f] -> u=%.6f\n", iter, y0, y1, u)
 
-			// 이번 사이클은 암호문 u 없음: 다음 루프로
-			iter++
-			if period > 0 {
-				time.Sleep(period)
-			}
-			continue
-		}
-
-		// 5) 컨트롤러에서 제어입력 암호문 u 수신
-		uCtPack := new(rlwe.Ciphertext)
-		if _, err := uCtPack.ReadFrom(rbuf); err != nil {
-			log.Printf("[Combined] Read uCtPack err at iter %d: %v", iter, err)
-			break
-		}
-
-		// 6) 복호 & 스케일 되돌림
-		uVec := RLWE.DecUnpack(uCtPack /*m=*/, m, tau, *decryptor, r*s*s*L, ringQ, params)
-		u := 0.0
-		if len(uVec) > 0 {
-			u = uVec[0]
-		}
-
-		// 7) Arduino로 제어입력 송신 (숫자만)
-		if _, err := port.Write([]byte(fmt.Sprintf("%.6f\n", u))); err != nil {
-			log.Printf("[Combined] Serial write err at iter %d: %v", iter, err)
-			break
-		}
-
-		fmt.Printf("[Combined] iter=%d | y=[%.6f %.6f] -> u=%.6f\n", iter, y0, y1, u)
-
-		iter++
-		if period > 0 {
-			time.Sleep(period)
-		}
-	}
+    iter++
+    if period > 0 {
+        time.Sleep(period)
+    }
+}
 	fmt.Println("[Combined] Stopped.")
 }
