@@ -2,6 +2,14 @@ Capstone_encryted_control
 =============
 2025 Capstone project repository
 
+# 비상
+1. 기존 아두이노에서 50ms 샘플링타임 잡고 돌려봤던 계산은 y 출력 측정 후 바로 u가 연산 후 입력 되는 구조
+2. 통신이 들엄가면 y 출력 측정 후 (통신 == 연산 == 통신) 만큼의 시간(\tau) 후 u가 입력 되는 구조
+   ==>> 이는 time delay를 유발 마치 u(t) = u(t+\tau) 가 들어가는 느낌
+
+해결: 타임 딜레이를 가정했을대 제어가 되는 게인, 샘플링타임을 찾아내서 다시 짬튜닝
+
+
 Description
 ====
 <ardu_to_rasp, rasp_to_pc, pc_to_rasp>
