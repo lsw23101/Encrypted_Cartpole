@@ -13,7 +13,7 @@ float ADCvalue = 0;
 float currentAngle = 0;
 const float ADCmin = 104.0;
 const float ADCmax = 919.0;
-const float ANGLE_OFFSET = 77.3 - 1.73;
+const float ANGLE_OFFSET = 77.3 - 1.73 + 10.8 + 12.0;
 
 // 타겟값
 double targetAngle = 0.0;
@@ -27,7 +27,7 @@ double u = 0.0;
 
 unsigned long lastControlTime = 0;
 const unsigned long controlInterval = 50; // 50ms
-bool isRunning = false; // 전원 켜면 기본은 '대기'
+bool isRunning = true; // 전원 켜면 기본은 '대기'
 
 // ---------- 유틸 ----------
 void moveMotor(int pwm, bool forward) {
@@ -37,6 +37,7 @@ void moveMotor(int pwm, bool forward) {
 
 inline void stopEverything() {
   u = 0.0;
+  encoderCount = 0;
   y[0] = 0.0; y[1] = 0.0;
   moveMotor(0, false);
 }

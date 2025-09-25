@@ -24,8 +24,10 @@ import (
 
 const (
 	// ===== TCP addresses =====
-	addrData = "127.0.0.1:9000" // 데이터 채널 (y 보내고 u 받기)
-	addrCtrl = "127.0.0.1:9001" // 제어 채널 (PAUSE/RESUME)
+	// addrData = "127.0.0.1:9000" // 데이터 채널 (y 보내고 u 받기)
+	// addrCtrl = "127.0.0.1:9001" // 제어 채널 (PAUSE/RESUME)
+	addrData = "192.168.0.115:8080" // 컨트롤러 주소
+	addrCtrl = "192.168.0.115:9000" // 컨트롤러 주소
 
 	// ===== Arduino serial =====
 	serialPort = "/dev/ttyACM0"
@@ -190,6 +192,9 @@ func main() {
 		}
 		y := []float64{y0, y1}
 
+		// ★ 로그 추가 (여기!)
+		fmt.Printf("[Plant] y from Arduino = [%.6f, %.6f]\n", y0, y1)
+
 		// 3) y 양자화 & 암호화
 		yBar := utils.RoundVec(utils.ScalVecMult(1.0/r, y))
 		yCtPack := RLWE.EncPack(yBar, tau, 1.0/L, *encryptor, ringQ, params)
@@ -218,6 +223,9 @@ func main() {
 		if len(uVec) > 0 {
 			u = uVec[0]
 		}
+
+		// ★ 로그 추가 (여기!)
+		fmt.Printf("[Plant] u after decrypt/scale = %.6f\n", u)
 
 		// 7) 아두이노로 u 전송 (실행 중일 때만)
 		if _, err := port.Write([]byte(fmt.Sprintf("%.6f\n", u))); err != nil {
