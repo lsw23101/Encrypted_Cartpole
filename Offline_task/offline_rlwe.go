@@ -5,7 +5,7 @@ import (
 	"log"
 	"math"
 
-	"Enc_control_RLWE/com_utils"
+	"Encrypted_Cartpole/com_utils"
 
 	"github.com/CDSL-EncryptedControl/CDSL/utils"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
@@ -25,7 +25,7 @@ func main() {
 	// Choose the size of plaintext modulus (2^ptSize)
 	ptSize := uint64(28)
 	// Choose the size of ciphertext modulus (2^ctSize)
-	ctSize := int(74)
+	ctSize := int(90)
 
 	// ============== Plant model ==============
 	A := [][]float64{

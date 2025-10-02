@@ -19,9 +19,9 @@ import (
 func main() {
 	// ================= 1) Encryption parameters =================
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN:    12,
-		LogQ:    []int{56},
-		LogP:    []int{51},
+		LogN:    11,
+		LogQ:    []int{28},
+		LogP:    []int{28},
 		NTTFlag: true,
 	})
 	fmt.Println("Degree of polynomials:", params.N())
@@ -33,7 +33,7 @@ func main() {
 	// ================= Controller (PID-based) =================
 	const (
 		Kp = 34.0
-		Ki = 4.0
+		Ki = 2.0
 		Kd = 42.0
 
 		Lp = 40.0
@@ -73,8 +73,8 @@ func main() {
 
 	// ================= 2) Quantization parameters =================
 	s := 1 / 1.0
-	L := 1 / 100000.0
-	r := 1 / 10000.0
+	L := 1 / 1000.0
+	r := 1 / 50.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v\n", 1/L, 1/s, 1/r)
 
 	// ================= 3) Rings / aux =================
@@ -232,7 +232,7 @@ func main() {
 	decryptorRLWE2 := rlwe.NewDecryptor(params, recoveredSk)
 
 	// ================= 9) Simulation: baseline (unencrypted) =================
-	iter := 1000
+	iter := 500
 	fmt.Printf("Number of iterations: %v\n", iter)
 
 	yUnenc := [][]float64{}
@@ -241,7 +241,7 @@ func main() {
 
 	x := append([]float64(nil), x_ini...)
 	for i := 0; i < iter; i++ {
-		y := []float64{0.001, 0.001}
+		y := []float64{-1, -1}
 		u := utils.VecAdd(
 			utils.MatVecMult(H, x),
 			utils.MatVecMult(J, y),
@@ -263,7 +263,7 @@ func main() {
 	// xCtPack := recoveredX
 
 	for i := 0; i < iter; i++ {
-		y := []float64{0.001, 0.001}
+		y := []float64{-1, -1}
 		startPeriod[i] = time.Now()
 
 		// Encrypt y with recovered secret key
@@ -303,8 +303,8 @@ func main() {
 	}
 
 	// // Optional CSV export
-	// utils.DataExport(uUnenc, "./uUnenc.csv")
-	// utils.DataExport(uEnc, "./uEnc.csv")
-	// utils.DataExport(uDiff, "./uDiff.csv")
+	utils.DataExport(uUnenc, "./uUnenc.csv")
+	utils.DataExport(uEnc, "./uEnc.csv")
+	utils.DataExport(uDiff, "./uDiff.csv")
 	// utils.DataExport(period, "./period.csv")
 }
