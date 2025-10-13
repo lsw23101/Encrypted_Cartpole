@@ -19,7 +19,7 @@ import (
 func main() {
 	// ================= 1) Encryption parameters =================
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN:    11,
+		LogN:    12,
 		LogQ:    []int{56},
 		LogP:    []int{51},
 		NTTFlag: true,
