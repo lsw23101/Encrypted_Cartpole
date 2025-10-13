@@ -136,7 +136,7 @@ func main() {
 	zeroCt := rlwe.NewCiphertext(params, 1)
 
 	// ================= 6) SAVE all artifacts =================
-	base := filepath.Join("enc_data", "rgsw_test")
+	base := filepath.Join("enc_data", "rgsw")
 	if err := com_utils.EnsureDir(base); err != nil {
 		log.Fatal(err)
 	}

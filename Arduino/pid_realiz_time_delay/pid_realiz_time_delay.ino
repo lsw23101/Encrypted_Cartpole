@@ -25,8 +25,11 @@ double angleError = 0.0;
 double positionError = 0.0;
 
 // ================== (수정) 튜닝 가능한 PID/LPD 게인들 ==================
-double Kp = 34, Ki = 2, Kd = 40;
-double Lp = 40, Li = 0, Ld = 3;
+double Kp = 34, Ki = 2.5, Kd = 42;
+double Lp = 30, Li = 0.1, Ld = 3; // 10/13
+
+// double Kp = 34, Ki = 2, Kd = 40;
+// double Lp = 40, Li = 0, Ld = 3;
 
 // double Kp = 26, Ki = 1.4, Kd = 36;
 // double Lp = 30, Li = 0, Ld = 5;
