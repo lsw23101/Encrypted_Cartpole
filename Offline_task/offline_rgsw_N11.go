@@ -34,7 +34,7 @@ func main() {
 	const (
 		Kp = 34.0
 		Ki = 2.0
-		Kd = 42.0
+		Kd = 40.0
 
 		Lp = 40.0
 		Li = 0.0
@@ -136,7 +136,7 @@ func main() {
 	zeroCt := rlwe.NewCiphertext(params, 1)
 
 	// ================= 6) SAVE all artifacts =================
-	base := filepath.Join("enc_data", "rgsw")
+	base := filepath.Join("enc_data", "rgsw_N11")
 	if err := com_utils.EnsureDir(base); err != nil {
 		log.Fatal(err)
 	}
