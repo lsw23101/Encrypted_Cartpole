@@ -1,4 +1,4 @@
-// file: controller_rgsw_dual.go
+// file: enc_controller.go
 package main
 
 import (
@@ -8,7 +8,6 @@ import (
 	"log"
 	"math"
 	"net"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -20,15 +19,16 @@ import (
 )
 
 const (
-	addrData = "192.168.0.115:8080" // 컨트롤러 주소
-	addrCtrl = "192.168.0.115:9000" // 컨트롤러 주소
-	// addrData = "127.0.0.1:9000"
-	// addrCtrl = "127.0.0.1:9001"
-	period = 0 * time.Millisecond
+	addr = "192.168.0.20:8080" // 서버 바인딩 주소
+	// addr = "192.168.0.115:8080"
+	numIters = 0                // 0 means infinite loop
+	period   = 0 * time.Millisecond
 )
 
+func ms(d time.Duration) float64 { return float64(d) / 1e6 }
+
 func main() {
-	// ===== Parameters =====
+	// ======== Parameters ========
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
 	})
@@ -54,17 +54,38 @@ func main() {
 		ringQ.NTT(monomials[i], monomials[i])
 	}
 
+	// ======== Load data ========
 	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw")
+
 	recoveredX := new(rlwe.Ciphertext)
-	_ = com_utils.ReadRT(filepath.Join(base, "xCtPack.dat"), recoveredX)
-	ctF, _ := com_utils.LoadRGSWPack(base, "ctF")
-	ctG, _ := com_utils.LoadRGSWPack(base, "ctG")
-	ctH, _ := com_utils.LoadRGSWPack(base, "ctH")
-	ctJ, _ := com_utils.LoadRGSWPack(base, "ctJ")
+	if err := com_utils.ReadRT(filepath.Join(base, "xCtPack.dat"), recoveredX); err != nil {
+		log.Fatalf("load xCtPack: %v", err)
+	}
+	ctF, err := com_utils.LoadRGSWPack(base, "ctF")
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctG, err := com_utils.LoadRGSWPack(base, "ctG")
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctH, err := com_utils.LoadRGSWPack(base, "ctH")
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctJ, err := com_utils.LoadRGSWPack(base, "ctJ")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	rlk := new(rlwe.RelinearizationKey)
-	_ = com_utils.ReadRT(filepath.Join(base, "rlk.dat"), rlk)
-	gks, _ := com_utils.LoadGaloisKeys(base)
+	if err := com_utils.ReadRT(filepath.Join(base, "rlk.dat"), rlk); err != nil {
+		log.Fatal(err)
+	}
+	gks, err := com_utils.LoadGaloisKeys(base)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	evkRGSW := rlwe.NewMemEvaluationKeySet(rlk)
 	evkRLWE := rlwe.NewMemEvaluationKeySet(rlk, gks...)
@@ -73,94 +94,85 @@ func main() {
 
 	zeroCt := rlwe.NewCiphertext(params, 1)
 
-	// ===== TCP server (데이터 + 제어) =====
-	lnData, _ := net.Listen("tcp", addrData)
-	defer lnData.Close()
-	connData, _ := lnData.Accept()
-	defer connData.Close()
-	rbufData := bufio.NewReader(connData)
-	wbufData := bufio.NewWriter(connData)
+	// ======== TCP server ========
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer ln.Close()
+	fmt.Println("[Controller] Listening on", addr, "...")
 
-	lnCtrl, _ := net.Listen("tcp", addrCtrl)
-	defer lnCtrl.Close()
-	connCtrl, _ := lnCtrl.Accept()
-	defer connCtrl.Close()
-	wbufCtrl := bufio.NewWriter(connCtrl)
+	conn, err := ln.Accept()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+	rbuf := bufio.NewReader(conn)
+	wbuf := bufio.NewWriter(conn)
 
-	fmt.Println("[Controller] Listening on", addrData, "(data) and", addrCtrl, "(ctrl)")
+	fmt.Println("[Controller] Connected to client")
 
-	paused := true
+	// ======== 루프 ========
+	var iter int
+	for {
+		iterStart := time.Now()
 
-	// ===== Keyboard goroutine =====
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			input := scanner.Text()
-			if input == "r" {
-				if paused {
-					// RESUME
-					wbufCtrl.WriteString("[CTRL]RESUME\n")
-					wbufCtrl.Flush()
-					fmt.Println("[Controller] Sent RESUME signal")
-					paused = false
-				} else {
-					// PAUSE
-					wbufCtrl.WriteString("[CTRL]PAUSE\n")
-					wbufCtrl.Flush()
-					fmt.Println("[Controller] Sent PAUSE signal")
-					paused = true
-
-					// ==== (중요) PAUSE 즉시 내부 상태 x 리셋 ====
-					// recoveredX := 0 (zero ciphertext)
-					// 안전하게 zeroCt와의 연산으로 새 zero ciphertext를 만들어 대입
-					recoveredX = RLWE.Add(zeroCt, zeroCt, zeroCt, params)
-					fmt.Println("[Controller] State x reset to zero (encrypted)")
-				}
-			}
-		}
-	}()
-
-	// ===== Main loop =====
-	for it := 0; ; it++ {
-		if paused {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		// 1) receive y
+		// --- 1) receive y ---
+		t := time.Now()
 		yCtPack := new(rlwe.Ciphertext)
-		if _, err := yCtPack.ReadFrom(rbufData); err != nil {
-			log.Printf("[Controller] Read yCtPack err at iter %d: %v (stop)", it, err)
+		if _, err := yCtPack.ReadFrom(rbuf); err != nil {
+			log.Printf("[Controller] Read yCtPack err at iter %d: %v", iter, err)
 			break
 		}
+		dRecv := time.Since(t)
 
-		// 2) unpack
+		// --- 2) unpack ---
+		t = time.Now()
 		xCt := RLWE.UnpackCt(recoveredX, n, tau, evaluatorRLWE, ringQ, monomials, params)
 		yCt := RLWE.UnpackCt(yCtPack, p, tau, evaluatorRLWE, ringQ, monomials, params)
+		dUnpack := time.Since(t)
 
-		// 3) compute u = Hx + Jy
+		// --- 3) compute u = Hx + Jy ---
+		t = time.Now()
 		uCtPack := RGSW.MultPack(xCt, ctH, evaluatorRGSW, ringQ, params)
 		JyCt := RGSW.MultPack(yCt, ctJ, evaluatorRGSW, ringQ, params)
 		uCtPack = RLWE.Add(uCtPack, JyCt, zeroCt, params)
+		dComputeU := time.Since(t)
 
-		// 4) send u
-		if _, err := uCtPack.WriteTo(wbufData); err != nil {
-			log.Printf("[Controller] Write uCtPack err at iter %d: %v (stop)", it, err)
+		// --- 4) send u ---
+		t = time.Now()
+		if _, err := uCtPack.WriteTo(wbuf); err != nil {
+			log.Printf("[Controller] Write uCtPack err at iter %d: %v", iter, err)
 			break
 		}
-		wbufData.Flush()
+		if err := wbuf.Flush(); err != nil {
+			log.Printf("[Controller] Flush err at iter %d: %v", iter, err)
+			break
+		}
+		dSend := time.Since(t)
 
-		// 5) update x
+		// --- 5) update x = Fx + Gy ---
+		t = time.Now()
 		FxCt := RGSW.MultPack(xCt, ctF, evaluatorRGSW, ringQ, params)
 		GyCt := RGSW.MultPack(yCt, ctG, evaluatorRGSW, ringQ, params)
 		recoveredX = RLWE.Add(FxCt, GyCt, zeroCt, params)
+		dUpdate := time.Since(t)
 
-		if it%50 == 0 {
-			fmt.Printf("[Controller] iter=%d done\n", it)
+		dIter := time.Since(iterStart)
+
+		// --- 출력 ---
+		fmt.Printf("[Controller] iter=%d | recv=%.3fms | unpack=%.3fms | computeU=%.3fms | send=%.3fms | update=%.3fms | total=%.3fms\n",
+			iter, ms(dRecv), ms(dUnpack), ms(dComputeU), ms(dSend), ms(dUpdate), ms(dIter))
+
+		iter++
+		if numIters > 0 && iter >= numIters {
+			break
 		}
 
 		if period > 0 {
 			time.Sleep(period)
 		}
 	}
+
+	fmt.Println("[Controller] Done.")
 }
