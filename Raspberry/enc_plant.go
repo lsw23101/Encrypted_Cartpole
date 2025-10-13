@@ -29,9 +29,9 @@ const (
 	baudRate   = 115200
 
 	// RLWE params (컨트롤러와 동일해야 함)
-	logN   = 12
-	logQ56 = 56
-	logP51 = 51
+	logN   = 11
+	logQ = 28
+	logP = 28
 
 	// 차원
 	m = 1 // control input dimension
@@ -39,8 +39,8 @@ const (
 
 	// 양자화 스케일 (컨트롤러와 동일)
 	s = 1.0 / 1.0
-	L = 1.0 / 100000.0
-	r = 1.0 / 10000.0
+	L = 1.0 / 1000.0
+	r = 1.0 / 50.0
 )
 
 // 루프 주기 (원하면 조정: 0이면 최대 속도)
@@ -74,8 +74,8 @@ func main() {
 	// ===== RLWE 세팅 =====
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN:    logN,
-		LogQ:    []int{logQ56},
-		LogP:    []int{logP51},
+		LogQ:    []int{logQ},
+		LogP:    []int{logP},
 		NTTFlag: true,
 	})
 	ringQ := params.RingQ()

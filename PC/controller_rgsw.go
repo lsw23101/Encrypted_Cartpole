@@ -30,15 +30,15 @@ func ms(d time.Duration) float64 { return float64(d) / 1e6 }
 func main() {
 	// ======== Parameters (저장 당시와 동일) ========
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
+		LogN: 11, LogQ: []int{28}, LogP: []int{28}, NTTFlag: true,
 	})
 	ringQ := params.RingQ()
 
 	// Controller dims & quant (저장 당시와 동일)
 	n, m, p := 4, 1, 2
 	s := 1 / 1.0
-	L := 1 / 100000.0
-	r := 1 / 10000.0
+	L := 1 / 1000.0
+	r := 1 / 50.0
 	_ = s
 	_ = L
 	_ = r
