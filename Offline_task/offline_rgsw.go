@@ -119,7 +119,7 @@ func main() {
 	GBar := utils.ScalMatMult(1/s, G)
 	HBar := utils.ScalMatMult(1/s, H)
 	RBar := utils.ScalMatMult(1/s, R)
-	JBar := utils.ScalMatMult(1/s, J)
+	JBar := utils.ScalMatMult(1/(s*s), J)
 
 	ctF := RGSW.EncPack(F, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctG := RGSW.EncPack(GBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
