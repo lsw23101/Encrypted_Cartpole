@@ -20,8 +20,8 @@ func main() {
 	// ================= 1) Encryption parameters =================
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN:    11,
-		LogQ:    []int{56},
-		LogP:    []int{51},
+		LogQ:    []int{28},
+		LogP:    []int{28},
 		NTTFlag: true,
 	})
 	fmt.Println("Degree of polynomials:", params.N())
@@ -73,8 +73,8 @@ func main() {
 
 	// ================= 2) Quantization parameters =================
 	s := 1 / 1.0
-	L := 1 / 10000.0
-	r := 1 / 1000.0
+	L := 1 / 1000.0
+	r := 1 / 50.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v\n", 1/L, 1/s, 1/r)
 
 	// ================= 3) Rings / aux =================
