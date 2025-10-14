@@ -72,9 +72,9 @@ func main() {
 	p := len(G[0])
 
 	// ================= 2) Quantization parameters =================
-	s := 1 / 1.0
-	L := 1 / 100000.0
-	r := 1 / 10000.0
+	s := 1 / 10.0
+	L := 1 / 10000.0
+	r := 1 / 1000.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v\n", 1/L, 1/s, 1/r)
 
 	// ================= 3) Rings / aux =================
@@ -119,7 +119,7 @@ func main() {
 	GBar := utils.ScalMatMult(1/s, G)
 	HBar := utils.ScalMatMult(1/s, H)
 	RBar := utils.ScalMatMult(1/s, R)
-	JBar := utils.ScalMatMult(1/s, J)
+	JBar := utils.ScalMatMult(1/(s*s), J)
 
 	ctF := RGSW.EncPack(F, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctG := RGSW.EncPack(GBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
@@ -241,7 +241,7 @@ func main() {
 
 	x := append([]float64(nil), x_ini...)
 	for i := 0; i < iter; i++ {
-		y := []float64{-1, -1}
+		y := []float64{-2, 2}
 		u := utils.VecAdd(
 			utils.MatVecMult(H, x),
 			utils.MatVecMult(J, y),
@@ -263,7 +263,7 @@ func main() {
 	// xCtPack := recoveredX
 
 	for i := 0; i < iter; i++ {
-		y := []float64{-1, -1}
+		y := []float64{-2, 2}
 		startPeriod[i] = time.Now()
 
 		// Encrypt y with recovered secret key
