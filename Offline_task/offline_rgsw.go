@@ -32,12 +32,12 @@ func main() {
 
 	// ================= Controller (PID-based) =================
 	const (
-		Kp = 34.0
-		Ki = 2.0
+		Kp = 32.0
+		Ki = 2.5
 		Kd = 40.0
 
-		Lp = 40.0
-		Li = 0.0
+		Lp = 30.0
+		Li = 0.1
 		Ld = 3.0
 	)
 
@@ -238,6 +238,7 @@ func main() {
 	yUnenc := [][]float64{}
 	uUnenc := [][]float64{}
 	xcUnenc := [][]float64{}
+
 
 	x := append([]float64(nil), x_ini...)
 	for i := 0; i < iter; i++ {
