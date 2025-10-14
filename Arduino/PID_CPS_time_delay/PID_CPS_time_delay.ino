@@ -16,7 +16,7 @@ float  ADCvalue      = 0.0f;
 float  currentAngle  = 0.0f;
 const float ADCmin   = 104.0f;
 const float ADCmax   = 919.0f;
-const float ANGLE_OFFSET = 77.3 -1.73 + 34.0; // 사용하신 오프셋
+const float ANGLE_OFFSET = 77.3 -1.73 + 34.0 -1.0; // 사용하신 오프셋
 
 // ---------------- 타겟 ----------------
 double targetAngle    = 0.0;
@@ -60,14 +60,19 @@ void updateEncoder() {
 // ---------------- 시리얼 수신(u) 파싱 ----------------
 // 라즈베리에서 '\n'으로 끝나는 실수 문자열 전송 가정
 bool tryReadU(double &u_out) {
-  if (Serial.available() <= 0) return false;
-  String line = Serial.readStringUntil('\n'); // 버퍼에 있을 때만 읽음(비블로킹)
-  if (line.length() == 0) return false;
-  u_out = line.toDouble();
-  // (권장) 디버그 에코가 필요하면 아래 두 줄을 잠깐만 사용하고, 평소엔 주석 처리
-  // Serial.print(","); 
-  // Serial.println(u_out, 6);
-  return true;
+  static char buf[16];
+  static byte idx = 0;
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      buf[idx] = '\0';
+      idx = 0;
+      u_out = atof(buf);
+      return true;
+    }
+    if (idx < sizeof(buf) - 1) buf[idx++] = c;
+  }
+  return false;
 }
 
 // ---------------- 설정 ----------------
