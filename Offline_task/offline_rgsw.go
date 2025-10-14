@@ -19,7 +19,7 @@ import (
 func main() {
 	// ================= 1) Encryption parameters =================
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN:    10,
+		LogN:    12,
 		LogQ:    []int{56},
 		LogP:    []int{51},
 		NTTFlag: true,
@@ -119,7 +119,7 @@ func main() {
 	GBar := utils.ScalMatMult(1/s, G)
 	HBar := utils.ScalMatMult(1/s, H)
 	RBar := utils.ScalMatMult(1/s, R)
-	JBar := utils.ScalMatMult(1/(s*s), J)
+	JBar := utils.ScalMatMult(1/s, J)
 
 	ctF := RGSW.EncPack(F, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctG := RGSW.EncPack(GBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
