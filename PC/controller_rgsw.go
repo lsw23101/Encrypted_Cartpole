@@ -30,7 +30,7 @@ func ms(d time.Duration) float64 { return float64(d) / 1e6 }
 func main() {
 	// ======== Parameters (저장 당시와 동일) ========
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 10, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
+		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
 	})
 	ringQ := params.RingQ()
 

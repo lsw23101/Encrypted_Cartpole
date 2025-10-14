@@ -29,7 +29,7 @@ const (
 	baudRate   = 115200
 
 	// RLWE params (컨트롤러와 동일해야 함)
-	logN   = 10
+	logN   = 12
 	logQ = 56
 	logP = 51
 
