@@ -33,6 +33,7 @@ const (
 	logP = 51
 
 	// 차원
+	n = 4
 	m = 1
 	p = 2
 
@@ -88,7 +89,7 @@ func main() {
 	})
 	ringQ := params.RingQ()
 
-	maxDim := math.Max(float64(m), float64(p))
+	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
 	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw")
