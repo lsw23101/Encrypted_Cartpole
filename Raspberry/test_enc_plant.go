@@ -10,7 +10,11 @@ import (
 	"math"
 	"net"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
+
+	"go.bug.st/serial"
 
 	utils "github.com/CDSL-EncryptedControl/CDSL/utils"
 	RLWE "github.com/CDSL-EncryptedControl/CDSL/utils/core/RLWE"
@@ -20,10 +24,12 @@ import (
 // ===== 사용자 환경에 맞게 조정 =====
 const (
 	addr       = "192.168.0.115:8080" // 컨트롤러 주소
-	// addr     = "127.0.0.1:9000"
+	// addr     = "127.0.0.1:9000" // 컨트롤러 주소
+	serialPort = "/dev/ttyACM0"
+	baudRate   = 115200
 
 	// RLWE params (컨트롤러와 동일해야 함)
-	logN = 12
+	logN = 10
 	logQ = 56
 	logP = 51
 
@@ -37,8 +43,32 @@ const (
 	r = 1.0 / 10000.0
 )
 
-// 루프 주기 (조정 가능)
-var period = 100 * time.Millisecond
+// 루프 주기 (원하면 조정: 0이면 최대 속도)
+var period = 0 * time.Millisecond
+
+// "a,b" 형태에서 두 실수를 관대하게 파싱
+func parseTwoFloats(line string) (float64, float64, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return 0, 0, errors.New("empty line")
+	}
+	parts := strings.SplitN(line, ",", 3)
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("malformed: %q", line)
+	}
+	lhs := strings.TrimSpace(parts[0])
+	rhs := strings.TrimSpace(parts[1])
+	// 아무것도 없는 토큰은 건너뛰도록 에러 반환
+	if lhs == "" || rhs == "" {
+		return 0, 0, fmt.Errorf("empty token: %q", line)
+	}
+	a0, err0 := strconv.ParseFloat(lhs, 64)
+	a1, err1 := strconv.ParseFloat(rhs, 64)
+	if err0 != nil || err1 != nil {
+		return 0, 0, fmt.Errorf("parse float failed: %v %v (line=%q)", err0, err1, line)
+	}
+	return a0, a1, nil
+}
 
 func main() {
 	// ===== RLWE 세팅 =====
@@ -71,71 +101,92 @@ func main() {
 	defer conn.Close()
 	rbuf := bufio.NewReader(conn)
 	wbuf := bufio.NewWriter(conn)
-	fmt.Println("[Test] Connected to controller:", addr)
+	fmt.Println("[Combined] Connected to controller:", addr)
+
+	// ===== 시리얼 오픈 =====
+	mode := &serial.Mode{BaudRate: baudRate}
+	port, err := serial.Open(serialPort, mode)
+	if err != nil {
+		log.Fatalf("serial open: %v", err)
+	}
+	defer port.Close()
+	// 입력 버퍼 드레인 (지원되는 경우)
+	if r, ok := port.(interface{ ResetInputBuffer() error }); ok {
+		_ = r.ResetInputBuffer()
+	}
+	sc := bufio.NewScanner(port)
+	// (아두이노가 가끔 CRLF/쓰레기 섞는 경우 대비)
+	sc.Buffer(make([]byte, 0, 256), 1024)
+	fmt.Println("[Combined] Serial opened:", serialPort, baudRate)
 
 	iter := 0
 	for {
-		tLoopStart := time.Now()
+		// 1) Arduino에서 한 줄 읽기
+		if !sc.Scan() {
+			if err := sc.Err(); err != nil {
+				log.Printf("[Combined] Serial scan error: %v", err)
+			} else {
+				log.Printf("[Combined] Serial EOF")
+			}
+			break
+		}
+		line := sc.Text()
 
-		// 1) y값 생성 (테스트용 고정)
-		y := []float64{0.1, 0.1}
+		// 2) 라인에서 y0,y1 파싱 (비정상 라인은 건너뜀)
+		y0, y1, err := parseTwoFloats(line)
+		if err != nil {
+			// 원본처럼 관대하게: 경고만 찍고 다음 라인으로
+			log.Printf("[Combined] skip bad line: %v", err)
+			continue
+		}
+		y := []float64{y0, y1}
 
-		// ===== 구간 1: 암호화 시간 측정 =====
-		tEncStart := time.Now()
+		// 3) 양자화 -> EncPack
 		yBar := utils.RoundVec(utils.ScalVecMult(1.0/r, y))
 		yCtPack := RLWE.EncPack(yBar, tau, 1.0/L, *encryptor, ringQ, params)
-		tEncEnd := time.Now()
 
-		// ===== 구간 2: 통신 (송신+응답수신) =====
-		tCommStart := time.Now()
+		// 🔹 TCP latency 측정 시작
+		tStart := time.Now()
+
+		// 4) 컨트롤러로 암호문 송신
 		if _, err := yCtPack.WriteTo(wbuf); err != nil {
-			log.Printf("[Test] Write yCtPack err at iter %d: %v", iter, err)
+			log.Printf("[Combined] Write yCtPack err at iter %d: %v", iter, err)
 			break
 		}
 		if err := wbuf.Flush(); err != nil {
-			log.Printf("[Test] Flush err at iter %d: %v", iter, err)
+			log.Printf("[Combined] Flush err at iter %d: %v", iter, err)
 			break
 		}
 
+		// 5) 컨트롤러에서 제어입력 암호문 u 수신
 		uCtPack := new(rlwe.Ciphertext)
 		if _, err := uCtPack.ReadFrom(rbuf); err != nil {
-			log.Printf("[Test] Read uCtPack err at iter %d: %v", iter, err)
+			log.Printf("[Combined] Read uCtPack err at iter %d: %v", iter, err)
 			break
 		}
-		tCommEnd := time.Now()
 
-		// ===== 구간 3: 복호화 =====
-		tDecStart := time.Now()
+		// 🔹 TCP 왕복시간 출력
+		fmt.Printf("[Latency] TCP round-trip: %.3f ms\n", float64(time.Since(tStart))/1e6)
+
+		// 6) 복호 & 스케일 되돌림
 		uVec := RLWE.DecUnpack(uCtPack /*m=*/, m, tau, *decryptor, r*s*s*L, ringQ, params)
-		tDecEnd := time.Now()
-
 		u := 0.0
 		if len(uVec) > 0 {
 			u = uVec[0]
 		}
 
-		// ===== 각 구간 시간 계산 =====
-		T_enc := tEncEnd.Sub(tEncStart)
-		T_comm := tCommEnd.Sub(tCommStart)
-		T_dec := tDecEnd.Sub(tDecStart)
-		RTT_total := tDecEnd.Sub(tLoopStart)
+		// 7) Arduino로 제어입력 송신 (원본처럼 직접 write)
+		if _, err := port.Write([]byte(fmt.Sprintf("%.6f\n", u))); err != nil {
+			log.Printf("[Combined] Serial write err at iter %d: %v", iter, err)
+			break
+		}
 
-		// ===== 출력 =====
-		fmt.Printf("[Test] iter=%d | y=[%.4f %.4f] -> u=%.6f | "+
-			"T_enc=%v | T_comm=%v | T_dec=%v | RTT_total=%v\n",
-			iter, y[0], y[1], u, T_enc, T_comm, T_dec, RTT_total)
+		fmt.Printf("[Combined] iter=%d | y=[%.6f %.6f] -> u=%.6f\n", iter, y0, y1, u)
 
 		iter++
-		time.Sleep(period)
+		if period > 0 {
+			time.Sleep(period)
+		}
 	}
-
-	fmt.Println("[Test] Stopped.")
-}
-
-// parseTwoFloats 함수는 여기선 사용 안 하지만, 에러 참고용으로 남겨둠.
-func parseTwoFloats(line string) (float64, float64, error) {
-	if line == "" {
-		return 0, 0, errors.New("empty line")
-	}
-	return 0, 0, errors.New("unused in this test")
+	fmt.Println("[Combined] Stopped.")
 }
