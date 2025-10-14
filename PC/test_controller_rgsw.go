@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	addr = "192.168.0.20:8080" // 서버 바인딩 주소
-	// addr = "192.168.0.115:8080"
+	// addr = "192.168.0.20:8080" // 서버 바인딩 주소
+	addr = "192.168.0.115:8080"
 	numIters = 0                // 0 means infinite loop
 	period   = 0 * time.Millisecond
 )
@@ -30,13 +30,13 @@ func ms(d time.Duration) float64 { return float64(d) / 1e6 }
 func main() {
 	// ======== Parameters ========
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
+		LogN: 10, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
 	})
 	ringQ := params.RingQ()
 
 	n, m, p := 4, 1, 2
-	s := 1 / 10.0
-	L := 1 / 10000.0
+	s := 1 / 1.0
+	L := 1 / 100000.0
 	r := 1 / 10000.0
 	_ = s
 	_ = L

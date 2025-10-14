@@ -19,7 +19,7 @@ import (
 func main() {
 	// ================= 1) Encryption parameters =================
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN:    12,
+		LogN:    10,
 		LogQ:    []int{56},
 		LogP:    []int{51},
 		NTTFlag: true,
@@ -33,11 +33,11 @@ func main() {
 	// ================= Controller (PID-based) =================
 	const (
 		Kp = 34.0
-		Ki = 2.5
+		Ki = 2.0
 		Kd = 42.0
 
-		Lp = 30.0
-		Li = 0.1
+		Lp = 40.0
+		Li = 0.0
 		Ld = 3.0
 	)
 
@@ -72,8 +72,8 @@ func main() {
 	p := len(G[0])
 
 	// ================= 2) Quantization parameters =================
-	s := 1 / 10.0
-	L := 1 / 10000.0
+	s := 1 / 1.0
+	L := 1 / 100000.0
 	r := 1 / 10000.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v\n", 1/L, 1/s, 1/r)
 

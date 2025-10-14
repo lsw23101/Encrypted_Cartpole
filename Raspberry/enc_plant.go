@@ -29,7 +29,7 @@ const (
 	baudRate   = 115200
 
 	// RLWE params (컨트롤러와 동일해야 함)
-	logN   = 12
+	logN   = 10
 	logQ = 56
 	logP = 51
 
@@ -38,8 +38,8 @@ const (
 	p = 2 // measurement dimension
 
 	// 양자화 스케일 (컨트롤러와 동일)
-	s = 1.0 / 10.0
-	L = 1.0 / 10000.0
+	s = 1.0 / 1.0
+	L = 1.0 / 100000.0
 	r = 1.0 / 10000.0
 )
 
