@@ -10,6 +10,8 @@ Capstone_encryted_control
 
 y(t) 출력에 대하여 입력은 u(t + $\tau$)
 
+$\tau = 20ms$
+
 
 # 제어기
 
