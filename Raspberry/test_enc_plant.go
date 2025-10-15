@@ -4,14 +4,18 @@ package main
 import (
 	"Encrypted_Cartpole/com_utils"
 	"bufio"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"net"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"go.bug.st/serial"
@@ -45,13 +49,20 @@ const (
 
 // PID 계수
 const (
-	Kp = 34.0
-	Ki = 2.0
+	Kp = 32.0
+	Ki = 2.5
 	Kd = 40.0
 
-	Lp = 40.0
-	Li = 0.0
+	Lp = 30.0
+	Li = 0.1
 	Ld = 3.0
+)
+
+// ===== 추가: 안전 임계치 & 루프 횟수 =====
+const (
+	angleLimit    = 40.0  // |angle| > 40 → u=0
+	positionLimit = 200.0 // |position| > 200 → u=0
+	maxIter       = 0     // 0=무한루프, 양수=그 횟수만큼만 실행
 )
 
 // 상태공간 행렬
@@ -77,6 +88,42 @@ func parseTwoFloats(line string) (float64, float64, error) {
 		return 0, 0, fmt.Errorf("parse float failed: %v %v (line=%q)", err0, err1, line)
 	}
 	return a0, a1, nil
+}
+
+// ---- CSV 저장 ----
+func saveCSV(path string, rows [][]string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	header := []string{
+		"iter", "t_ms",
+		"y0_angle", "y1_position",
+		"uLocal", "uRemote", "uOut", "uDiff",
+		"loopIntervalMs", "tcpRttMs",
+		"clamped",
+	}
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if err := w.Write(r); err != nil {
+			return err
+		}
+	}
+	return w.Error()
+}
+
+func boolTo01(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
 
 func main() {
@@ -121,11 +168,49 @@ func main() {
 	sc.Buffer(make([]byte, 0, 256), 1024)
 	fmt.Println("[Combined] Serial opened:", serialPort, baudRate)
 
+	// ===== 신호 처리 (Ctrl+C / SIGTERM) =====
+	stopSig := make(chan os.Signal, 1)
+	signal.Notify(stopSig, os.Interrupt, syscall.SIGTERM)
+	quit := make(chan struct{})
+	go func() {
+		<-stopSig
+		fmt.Println("\n[Signal] Interrupt received. Will stop after current iteration and save CSV...")
+		close(quit)
+	}()
+
+	// ===== 로깅 준비 =====
+	startT := time.Now()
+	csvPath := fmt.Sprintf("enc_plant_log_%s.csv", time.Now().Format("20060102_150405"))
+	records := make([][]string, 0, 4096)
+	fmt.Println("[CSV] Logging to:", csvPath)
+
+	// 종료 시 CSV 저장(가능한 한 보장)
+	defer func() {
+		if len(records) == 0 {
+			fmt.Println("[CSV] No data collected.")
+			return
+		}
+		if err := saveCSV(csvPath, records); err != nil {
+			log.Printf("[CSV] Save error: %v", err)
+		} else {
+			fmt.Printf("[CSV] Saved %d rows to %s\n", len(records), csvPath)
+		}
+	}()
+
 	var lastTime time.Time
 	iter := 0
 
+Loop:
 	for {
-		// 1) Arduino에서 y 읽기
+		// 신호로 중지 요청이 이미 들어왔고, 새 입력을 기다리기 싫다면 여기서도 체크 가능
+		select {
+		case <-quit:
+			fmt.Println("[Combined] Stop requested before reading next sample.")
+			break Loop
+		default:
+		}
+
+		// 1) Arduino에서 y 읽기 (angle=y[0], position=y[1] 가정)
 		if !sc.Scan() {
 			if err := sc.Err(); err != nil {
 				log.Printf("[Combined] Serial scan error: %v", err)
@@ -140,13 +225,15 @@ func main() {
 			log.Printf("[Combined] skip bad line: %v", err)
 			continue
 		}
-		y[0] = y0
-		y[1] = y1
+		y[0] = y0 // angle
+		y[1] = y1 // position
 
 		// 루프 주기 모니터링
 		now := time.Now()
+		intervalMs := 0.0
 		if !lastTime.IsZero() {
-			fmt.Printf("[Loop] interval: %.3f ms\n", float64(now.Sub(lastTime))/1e6)
+			intervalMs = float64(now.Sub(lastTime)) / 1e6
+			fmt.Printf("[Loop] interval: %.3f ms\n", intervalMs)
 		}
 		lastTime = now
 
@@ -183,8 +270,9 @@ func main() {
 			break
 		}
 
-		// 🔹 TCP 왕복시간 출력
-		fmt.Printf("[Latency] TCP round-trip: %.3f ms\n", float64(time.Since(tStart))/1e6)
+		// 🔹 TCP 왕복시간
+		rttMs := float64(time.Since(tStart)) / 1e6
+		fmt.Printf("[Latency] TCP round-trip: %.3f ms\n", rttMs)
 
 		// 5) 복호화 및 스케일 복원
 		uVec := RLWE.DecUnpack(uCtPack, m, tau, *decryptor, r*s*s*L, ringQ, params)
@@ -194,16 +282,57 @@ func main() {
 		}
 
 		// 6) 두 제어 입력 비교 출력
-		diff := uLocal - uRemote
-		fmt.Printf("[Compare] uLocal=%.6f | uRemote=%.6f | Δ=%.6f\n", uLocal, uRemote, diff)
+		uDiff := uLocal - uRemote
+		fmt.Printf("[Compare] uLocal=%.6f | uRemote=%.6f | Δ=%.6f\n", uLocal, uRemote, uDiff)
 
-		// 7) 실제로 아두이노에 보낼 것은 로컬 계산한 u
-		if _, err := port.Write([]byte(fmt.Sprintf("%.6f\n", uLocal))); err != nil {
+		// 7) 안전 로직: |angle|>40 또는 |position|>200 이면 u=0
+		angle := y[0]
+		position := y[1]
+		uOut := uRemote
+		clamped := false
+		if math.Abs(angle) > angleLimit || math.Abs(position) > positionLimit {
+			uOut = 0.0
+			clamped = true
+			fmt.Printf("[SAFEGUARD] |angle|=%.3f, |position|=%.3f beyond (%.1f, %.1f) → u=0 sent.\n",
+				math.Abs(angle), math.Abs(position), angleLimit, positionLimit)
+		}
+
+		// 8) 실제로 아두이노에 보낼 것은 uOut
+		if _, err := port.Write([]byte(fmt.Sprintf("%.6f\n", uOut))); err != nil {
 			log.Printf("[Combined] Serial write err: %v", err)
 			break
 		}
 
+		// 9) 로깅 (CSV용)
+		elapsedMs := float64(time.Since(startT)) / 1e6
+		record := []string{
+			strconv.Itoa(iter),
+			fmt.Sprintf("%.3f", elapsedMs),
+			fmt.Sprintf("%.6f", y[0]),
+			fmt.Sprintf("%.6f", y[1]),
+			fmt.Sprintf("%.6f", uLocal),
+			fmt.Sprintf("%.6f", uRemote),
+			fmt.Sprintf("%.6f", uOut),
+			fmt.Sprintf("%.6f", uDiff),
+			fmt.Sprintf("%.3f", intervalMs),
+			fmt.Sprintf("%.3f", rttMs),
+			boolTo01(clamped),
+		}
+		records = append(records, record)
+
 		iter++
+
+		// 10) 루프 종료 조건
+		if maxIter > 0 && iter >= maxIter {
+			fmt.Println("[Combined] Reached max iterations.")
+			break
+		}
+		select {
+		case <-quit:
+			fmt.Println("[Combined] Stop requested by signal.")
+			break Loop
+		default:
+		}
 	}
 	fmt.Println("[Combined] Stopped.")
 }
