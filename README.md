@@ -2,34 +2,31 @@ Capstone_encryted_control
 =============
 2025 Capstone project repository
 
-# 시간 지연 문제
-1. 기존 아두이노에서 50ms 샘플링타임 잡고 돌려봤던 계산은 y 출력 측정 후 바로 u가 연산 후 입력 되는 구조
-2. 통신이 들엄가면 y 출력 측정 후 (통신 == 연산 == 통신) 만큼의 시간(\tau) 후 u가 입력 되는 구조
-   ==>> 이는 time delay를 유발 마치 u(t) = u(t+\tau) 가 들어가는 느낌
+# 시간 지연 시스템
+현재 샘플링 시간: 30ms 
 
-해결: 타임 딜레이를 가정했을대 제어가 되는 게인, 샘플링타임을 찾아내서 다시 짬튜닝
+하지만 직접항, feedthrough term 이 존재하기 때문에 시간 계획으로는 시간 지연을 없앨 수 없음
+>> 플랜트에서 송신 - 제어기 연산 - 플랜트 수신 까지의 시간이 지연되어 제어입력이 들어감
+
+y(t) 출력에 대하여 입력은 u(t + $\tau$)
+
+
+# 제어기
+
+출력 2개에 대하여 병렬 PID 사용
+>> 상태공간으로 realization
+
+이때 상태행렬은 diag([0 1 0 1]) >> 재암호화 필요 x
+
+error growth는 closed loop stability로 제어
+(||u|| < 0.1901)
+
 
 # ToDo
-1. 시간 지연 문제 해결 됨 =>> 전체루프: 30ms, 시간지연: 20ms
-2. PID 계수 살짝 변경 됨 >> 변경해서 offline task 돌리기
+1. PID fine tuning
+2. 기구 꾸미기
 
 
-Description
-====
-<ardu_to_rasp, rasp_to_pc, pc_to_rasp>
-- 일단 PID를 realization 한 연산에 대하여 통신 구현
-
-<plant_rgsw.go and controller_rgsw.go>
-- 앞서 구한 PID 상태공간 실현한 것 암호화 연산 나누기 성공
-- 재암호화의 필요가 없으므로 13ms 내외가 걸림 (RLWE보다 장점)
-- (중요!) Lattigo에서는 WriteTo랑 ReadFrom 이라는 함수를 지원하여 버퍼에 바로 담고 읽을 수 있었음
-  => 기존에 직렬화하고 바이트 수만큼 버퍼 나누고 이러는 작업이 필요 x
-
-~~<plant.go and controller.go>~~
-~~- Lattigo CDSL 라이브러리 두개로 나눈거 돌려보는 실행파일~~
-~~- 현재 한 루프에 30ms 이내 (프린트 문을 빼도 비슷함)~~
-~~- 한번씩 통신 오류 발생 (+ 한번씩 50ms 넘는 루프타임)~~
-~~- com_utils : 파일 읽고 쓰기 관련 함수~~
 
 # 결과
 ```
