@@ -19,9 +19,10 @@ x = df["iter"]
 # ===== 5. Plot 1: 출력값 (Angle & Position) =====
 plt.figure(figsize=(8, 6))
 plt.plot(x, df["y0_angle"], label="Angle (deg)")
-plt.plot(x, df["y1_position"], label="Position (m)")
+plt.plot(x, df["y1_position"], label="Position (rad)")
 plt.ylabel("Output")
-plt.title("Plant Outputs (Angle & Position)")
+plt.xlabel("Iteration")
+plt.title("Plant Outputs")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
@@ -35,7 +36,8 @@ plt.plot(x, df["uLocal"], label="u_Original",
 plt.plot(x, df["uRemote"], label="u_Encrypted",
          color="tab:orange", linewidth=1.5,
          linestyle=(0, (8, 6)))  # 느슨한 점선
-plt.ylabel("Control Input")
+plt.ylabel("Control Input (PWM)")
+plt.xlabel("Iteration")
 plt.title("Control Input Comparison")
 plt.legend()
 plt.grid(True)
