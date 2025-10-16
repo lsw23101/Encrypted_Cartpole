@@ -109,8 +109,19 @@ func main() {
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	rbuf := bufio.NewReader(conn)
-	wbuf := bufio.NewWriter(conn)
+
+	// --- TCP 설정 추가 ---
+	tcp := conn.(*net.TCPConn)
+	tcp.SetNoDelay(true) // Nagle off (지연 ACK 40ms 방지)
+	tcp.SetKeepAlive(true)
+	tcp.SetReadBuffer(1 << 20)  // 1 MiB
+	tcp.SetWriteBuffer(1 << 20) // 1 MiB
+
+	// --- bufio 버퍼 크게 ---
+	rbuf := bufio.NewReaderSize(tcp, 256<<10) // 256 KiB
+	wbuf := bufio.NewWriterSize(tcp, 256<<10) // 256 KiB
+
+	fmt.Println("[Controller] TCP connection established with client.")
 
 	// ======== Accumulators (avg만 출력) ========
 	var sumRecv, sumUnpack, sumComputeU, sumSend, sumUpdate, sumIter time.Duration

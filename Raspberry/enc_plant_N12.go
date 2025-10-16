@@ -153,9 +153,18 @@ func main() {
 		log.Fatalf("tcp dial: %v", err)
 	}
 	defer conn.Close()
-	rbuf := bufio.NewReader(conn)
-	wbuf := bufio.NewWriter(conn)
 	fmt.Println("[Combined] Connected to controller:", addr)
+
+	// 공통: Dial 직후 옵션 설정
+	tcp := conn.(*net.TCPConn)
+	tcp.SetNoDelay(true) // Nagle off: 40ms 지연 제거
+	tcp.SetKeepAlive(true)
+	tcp.SetReadBuffer(1 << 20) // 1 MiB
+	tcp.SetWriteBuffer(1 << 20)
+
+	// bufio Reader/Writer를 큰 버퍼로 설정
+	rbuf := bufio.NewReaderSize(tcp, 256<<10) // 256 KiB
+	wbuf := bufio.NewWriterSize(tcp, 256<<10) // 256 KiB
 
 	// ===== 시리얼 오픈 =====
 	mode := &serial.Mode{BaudRate: baudRate}
