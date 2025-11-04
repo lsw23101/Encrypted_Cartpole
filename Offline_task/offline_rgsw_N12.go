@@ -34,10 +34,10 @@ func main() {
 	const (
 		Kp = 32.0
 		Ki = 2.5
-		Kd = 40.0
+		Kd = 42.0
 
 		Lp = 30.0
-		Li = 0.1
+		Li = 0.5
 		Ld = 3.0
 	)
 
