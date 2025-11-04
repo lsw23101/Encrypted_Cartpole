@@ -19,9 +19,9 @@ import (
 func main() {
 	// ================= 1) Encryption parameters =================
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN:    10,
-		LogQ:    []int{56},
-		LogP:    []int{51},
+		LogN:    12,
+		LogQ:    []int{40},
+		LogP:    []int{40},
 		NTTFlag: true,
 	})
 	fmt.Println("Degree of polynomials:", params.N())
@@ -34,10 +34,10 @@ func main() {
 	const (
 		Kp = 32.0
 		Ki = 2.5
-		Kd = 42.0
+		Kd = 40.0
 
 		Lp = 30.0
-		Li = 0.5
+		Li = 0.1
 		Ld = 3.0
 	)
 
@@ -136,7 +136,7 @@ func main() {
 	zeroCt := rlwe.NewCiphertext(params, 1)
 
 	// ================= 6) SAVE all artifacts =================
-	base := filepath.Join("enc_data", "rgsw_for_N10")
+	base := filepath.Join("enc_data", "rgsw_test")
 	if err := com_utils.EnsureDir(base); err != nil {
 		log.Fatal(err)
 	}
