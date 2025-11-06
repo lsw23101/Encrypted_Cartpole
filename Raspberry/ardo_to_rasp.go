@@ -3,10 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"go.bug.st/serial"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.bug.st/serial"
 )
 
 var lastTime time.Time
@@ -15,10 +16,10 @@ var lastTime time.Time
 const (
 	Kp = 34.0
 	Ki = 2.5
-	Kd = 42.0
+	Kd = 40.0
 
 	Lp = 30.0
-	Li = 0.1
+	Li = 0.5
 	Ld = 3.0
 )
 
@@ -46,8 +47,6 @@ var state = []float64{0, 0, 0, 0} // 4x1
 var y = []float64{0, 0}           // 2x1
 var u = 0.0                       // 1x1
 
-
-
 func main() {
 	mode := &serial.Mode{BaudRate: 115200}
 	port, err := serial.Open("/dev/ttyACM0", mode) // 아두이노 연결
@@ -73,20 +72,16 @@ func main() {
 			continue
 		}
 
-
-
-
 		// 1. y값 파싱
 		parts := strings.Split(line, ",")
 		if len(parts) != 2 {
 			continue
 		}
 
-
 		y0, err0 := strconv.ParseFloat(parts[0], 64)
 		y1, err1 := strconv.ParseFloat(parts[1], 64)
 		if err0 != nil || err1 != nil {
-		    continue
+			continue
 		}
 
 		now := time.Now()
@@ -103,27 +98,18 @@ func main() {
 		u = C[0]*state[0] + C[1]*state[1] + C[2]*state[2] + C[3]*state[3] +
 			D[0]*y[0] + D[1]*y[1]
 
-
 		// 3. 상태 업데이트 (간단한 적분기/미분기 모델)
 		state[0] += y[0]
 		state[1] = y[0]
 		state[2] += y[1]
 		state[3] = y[1]
 
-
-		
 		fmt.Printf("받은 y = [%.3f, %.3f], 보낸 u = %.3f\n", y0, y1, u)
 
+		time.Sleep(15)
 
 		// 4. 아두이노로 송신
 		port.Write([]byte(fmt.Sprintf("%.6f\n", u)))
 
-		
-		
 	}
 }
-
-
-
-
-
