@@ -20,7 +20,7 @@ import (
 const (
 	// addr = "192.168.0.20:8080" // 서버 바인딩 주소
 	addr     = "192.168.0.115:8080" // 서버 바인딩 주소
-	numIters = 500                  // 0 means infinite loop
+	numIters = 1500                 // 0 means infinite loop
 	period   = 0 * time.Millisecond
 
 	printEvery = 100 // ★ 매 100회마다 요약 출력

@@ -105,6 +105,9 @@ func main() {
 
 		// 4) 출력: 턴어라운드 시간만 표시 (y 수신→u 송신까지)
 		turnaroundMs := float64(time.Since(tRecv).Microseconds()) / 1000.0
-		fmt.Printf("turnaround_ms=%.3f\n", turnaroundMs)
+		fmt.Printf("turnaround_ms=%.3f", turnaroundMs)
+		fmt.Printf("y0=%.3f", y0)
+		fmt.Printf("y1=%.3f", y1)
+		fmt.Printf("u=%.3f\n", u)
 	}
 }
