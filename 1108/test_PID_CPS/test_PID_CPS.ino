@@ -55,6 +55,17 @@ void updateEncoder() {
   else        encoderCount--;
 }
 
+// ---------------- ADC 평균 필터 함수 ----------------
+// sampleCount가 클수록 잡음은 줄고 시간은 늘어납니다(루프 예산 고려).
+float readFilteredADC(int pin, int sampleCount = 100) {
+  long total = 0;
+  for (int i = 0; i < sampleCount; i++) {
+    total += analogRead(pin);
+    delayMicroseconds(5);
+  }
+  return total / (float)sampleCount;
+}
+
 // ---------------- u 수신 (기간 내 1회만) ----------------
 // '\n' 또는 '\r'로 끝나는 실수 문자열 1개를 기간 내에 받으면 true
 bool readUSingleWithin(unsigned long windowMs, double &u_out) {
@@ -108,47 +119,59 @@ void loop() {
     unsigned long t_start = t_next;
     t_next += controlIntervalMs;
 
-    // 1) 센싱 & 각도 보정
-    ADCvalue = analogRead(A1);
+    // ---------------- 센싱/전처리 (LPF 적용) ----------------
+    // 1) ADC → 각도 (평균 필터 사용)
+    ADCvalue = readFilteredADC(A1, 100); // 시간 예산에 맞춰 sampleCount 조절 가능
     currentAngle = (ADCvalue - ADCmin) * 360.0f / (ADCmax - ADCmin);
     currentAngle = constrain(currentAngle, 0.0f, 360.0f);
 
+    // 2) 오프셋 보정
     currentAngle += ANGLE_OFFSET;
     if (currentAngle < 0.0f)    currentAngle += 360.0f;
     if (currentAngle >= 360.0f) currentAngle -= 360.0f;
 
+    // 3) -180 ~ +180 변환
     float relativeAngle = currentAngle;
-    if (relativeAngle > 180.0f) relativeAngle -= 360.0f; // -180 ~ +180
+    if (relativeAngle > 180.0f) relativeAngle -= 360.0f;
 
-    // 2) 오차 계산
-    y0_angleError = (double)targetAngle    - (double)relativeAngle;
-    y1_posError   = (double)targetPosition - (double)getCartDistanceM();
+    // 4) 각도 오차 (목표는 0)
+    targetAngle = 0.0;
+    double angleError = (double)targetAngle - (double)relativeAngle;
+
+    // 5) 위치 오차
+    double cartPosition  = (double)getCartDistanceM();
+    double positionError = (double)targetPosition - cartPosition;
+
+    // ---------------- y 송신 ----------------
+    y0_angleError = angleError;
+    y1_posError   = positionError;
 
     // 3) y 송신: "y0,y1\n" (소수 6자리)
     Serial.print(y0_angleError, 6);
     Serial.print(",");
     Serial.println(y1_posError, 6);
 
-    // 4) 루프 시작 시각 기준 정확히 20ms 지연 내에서 u 1회만 수신 시도
+    // ---------------- actuationDelay 창 내 u 수신 ----------------
+    // 루프 시작 시각 기준 정확히 20ms 지연 내에서 u 1회만 수신 시도
     double u_recv = u_applied;           // 기본값: 직전 u 유지
     bool got = readUSingleWithin(actuationDelayMs, u_recv);
     if (got) u_applied = u_recv;         // 수신되면 갱신
 
     // (정밀 지연) 루프 시작→20ms 도달 보장
     while ((long)(millis() - t_start) < (long)actuationDelayMs) {
-      // 남은 수 μs 동안 바쁜대기 (짧은 sleep로 CPU 점유 최소화)
+      // 남은 수 μs 동안 바쁜대기 (짧은 sleep로 CPU 점유율 최소화)
       delayMicroseconds(50);
     }
 
-    // 5) 모터 구동 (네거티브 피드백)
+    // ---------------- 모터 구동 ----------------
+    // 네거티브 피드백
     double u_cmd = -u_applied;
     int pwmValue = constrain((int)fabs(u_cmd), 0, 255);
     bool forward = (u_cmd > 0.0);
     moveMotor(pwmValue, forward);
 
-    // 6) 남은 시간 대기하여 30ms 정확히 맞춤
+    // ---------------- 30ms 정합 ----------------
     while ((long)(millis() - t_start) < (long)controlIntervalMs) {
-      // 필요 시 여기서 아주 짧게 쉬어 전력/점유율 낮춤
       delayMicroseconds(100);
     }
   }
