@@ -1,4 +1,4 @@
-// ================== Arduino — RPi 통신(115200) + 20ms 지연 + 30ms 루프 + 프레임ID/수신분류 ==================
+// ================== Arduino — RPi 통신 (30ms 루프 / 20ms 액츄에이터 지연) ==================
 #include <Arduino.h>
 #include <math.h>
 
@@ -16,31 +16,21 @@ float  ADCvalue      = 0.0f;
 float  currentAngle  = 0.0f;
 const float ADCmin   = 104.0f;
 const float ADCmax   = 919.0f;
-const float ANGLE_OFFSET = 77.3f - 1.73f + 34.0f - 1.0f; // 사용 오프셋
+const float ANGLE_OFFSET = 77.3 - 1.73 + 34.0 - 1.0; // 사용 중인 오프셋
 
 // ---------------- 타겟 ----------------
-double targetAngle    = 0.0;
+double targetAngle    = 0.0; // 필요시 상위 시스템에서 추후 확장 가능 (현재는 0 기준)
 double targetPosition = 0.0;
 
 // ---------------- 출력(y) / 입력(u) ----------------
-double angErr = 0.0;   // 각도 오차
-double posErr = 0.0;   // 위치 오차
-double u_rx   = 0.0;   // 이번 주기에 받은 u
-double u_last = 0.0;   // 직전 주기 u (ZOH)
+double y0_angleError = 0.0;      // y[0]
+double y1_posError   = 0.0;      // y[1]
+double u_applied     = 0.0;      // 마지막으로 적용된 u (타임아웃 시 유지)
 
 // ---------------- 타이밍 ----------------
-unsigned long lastControlTime         = 0;
-const unsigned long controlIntervalMs = 30;     // 주기 30ms
-const unsigned long actuationDelayUs  = 20000;  // 지연 20ms
-
-bool isRunning = true;
-
-// ---------------- 프레임/진단 ----------------
-uint32_t frameId = 0;               // y에 붙는 프레임 번호(증가)
-uint32_t recv_dup_same_fid = 0;     // 같은 fid로 u가 2번 이상 옴
-uint32_t recv_late_old_fid = 0;     // 옛날(fid < current) u 도착
-uint32_t recv_future_fid   = 0;     // 미래(fid > current) u 도착(이상)
-uint32_t miss_no_u_in_win  = 0;     // 20ms 창에서 u를 못 받은 횟수
+const unsigned long controlIntervalMs = 30; // 전체 제어 주기
+const unsigned long actuationDelayMs  = 20; // 루프 시작→구동까지 고정 지연
+unsigned long t_next = 0;                   // 다음 루프 기준시각(드리프트 제거)
 
 // ---------------- 유틸 ----------------
 inline float getCartDistanceM() {
@@ -53,125 +43,113 @@ inline void moveMotor(int pwm, bool forward) {
   analogWrite(MOTOR_PWM_PIN, pwm);
 }
 
-inline void stopMotor() { analogWrite(MOTOR_PWM_PIN, 0); }
+inline void stopMotor() {
+  analogWrite(MOTOR_PWM_PIN, 0);
+}
 
 // ---------------- 엔코더 ISR ----------------
 void updateEncoder() {
   bool A = digitalRead(encoderPinA);
   bool B = digitalRead(encoderPinB);
-  if (A == B) encoderCount++; else encoderCount--;
+  if (A == B) encoderCount++;
+  else        encoderCount--;
 }
 
-// ---------------- 시리얼 수신(u) 파싱: "fid,u" 또는 단일 "u" 허용 ----------------
-bool tryReadU(uint32_t &fid_out, double &u_out) {
-  static char buf[40];
-  static uint8_t idx = 0;
+// ---------------- u 수신 (기간 내 1회만) ----------------
+// '\n' 또는 '\r'로 끝나는 실수 문자열 1개를 기간 내에 받으면 true
+bool readUSingleWithin(unsigned long windowMs, double &u_out) {
+  static char buf[24];
+  static byte idx = 0;
 
-  while (Serial.available() > 0) {
-    char c = Serial.read();
-    if (c == '\r') continue;
-    if (c == '\n') {
-      buf[idx] = '\0'; idx = 0;
-      if (buf[0] == '\0') continue;
-
-      // 콤마가 있으면 "fid,u" 시도
-      char *comma = strchr(buf, ',');
-      if (comma) {
-        *comma = '\0';
-        char *s0 = buf;
-        char *s1 = comma + 1;
-        unsigned long fid = strtoul(s0, nullptr, 10);
-        double uval = atof(s1);
-        fid_out = (uint32_t)fid;
-        u_out   = uval;
-        return true;
+  unsigned long deadline = millis() + windowMs;
+  while ((long)(deadline - millis()) > 0) {
+    while (Serial.available() > 0) {
+      char c = Serial.read();
+      if (c == '\n' || c == '\r') {
+        if (idx > 0) {
+          buf[idx] = '\0';
+          idx = 0;
+          u_out = atof(buf);
+          return true;  // 이번 루프에선 단 1회만 수신
+        }
+        idx = 0; // 빈 줄이면 초기화 후 계속
       } else {
-        // 구버전 호환: "u"만 온 경우 → 현재 프레임으로 간주(권장 X)
-        fid_out = frameId;
-        u_out   = atof(buf);
-        return true;
+        if (idx < sizeof(buf) - 1) buf[idx++] = c;
       }
     }
-    if (idx < sizeof(buf) - 1) buf[idx++] = c;
+    delayMicroseconds(200);
   }
+  idx = 0; // 타임아웃 시 버퍼 정리
   return false;
 }
 
 // ---------------- 설정 ----------------
 void setup() {
-  Serial.begin(115200);  // 고정
+  Serial.begin(115200);
+
   pinMode(MOTOR_DIR_PIN, OUTPUT);
   pinMode(MOTOR_PWM_PIN, OUTPUT);
+
   pinMode(encoderPinA, INPUT_PULLUP);
   pinMode(encoderPinB, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(encoderPinA), updateEncoder, CHANGE);
 
-  // 쉼표 없는 안내 (라즈베리 파서 혼선 방지)
-  Serial.println("Arduino ready @115200 30ms loop 20ms delay with fid");
+  stopMotor();
+  t_next = millis(); // 현재 시각부터 스케줄 시작
+
+  // 필요시 초기 상태 알림 한 줄 (디버깅용)
+  Serial.println("READY");
 }
 
 // ---------------- 메인 루프 ----------------
 void loop() {
-  if (!isRunning) return;
+  // 스케줄된 30ms 타이밍에 맞춰 실행 (드리프트 제거)
+  if ((long)(millis() - t_next) >= 0) {
+    unsigned long t_start = t_next;
+    t_next += controlIntervalMs;
 
-  unsigned long now = millis();
-  if (now - lastControlTime < controlIntervalMs) return;
-  lastControlTime += controlIntervalMs;
+    // 1) 센싱 & 각도 보정
+    ADCvalue = analogRead(A1);
+    currentAngle = (ADCvalue - ADCmin) * 360.0f / (ADCmax - ADCmin);
+    currentAngle = constrain(currentAngle, 0.0f, 360.0f);
 
-  // 1) 각도 계산
-  ADCvalue = analogRead(A1);
-  currentAngle = (ADCvalue - ADCmin) * 360.0f / (ADCmax - ADCmin);
-  currentAngle = constrain(currentAngle, 0.0f, 360.0f);
-  currentAngle += ANGLE_OFFSET;
-  if (currentAngle < 0.0f)    currentAngle += 360.0f;
-  if (currentAngle >= 360.0f) currentAngle -= 360.0f;
+    currentAngle += ANGLE_OFFSET;
+    if (currentAngle < 0.0f)    currentAngle += 360.0f;
+    if (currentAngle >= 360.0f) currentAngle -= 360.0f;
 
-  float relativeAngle = currentAngle;
-  if (relativeAngle > 180.0f) relativeAngle -= 360.0f;
+    float relativeAngle = currentAngle;
+    if (relativeAngle > 180.0f) relativeAngle -= 360.0f; // -180 ~ +180
 
-  // 2) 오차
-  angErr = (double)targetAngle    - (double)relativeAngle;
-  posErr = (double)targetPosition - (double)getCartDistanceM();
+    // 2) 오차 계산
+    y0_angleError = (double)targetAngle    - (double)relativeAngle;
+    y1_posError   = (double)targetPosition - (double)getCartDistanceM();
 
-  // 3) 타임스탬프/데드라인
-  uint32_t t_calc   = micros();
-  uint32_t deadline = t_calc + (uint32_t)actuationDelayUs;
+    // 3) y 송신: "y0,y1\n" (소수 6자리)
+    Serial.print(y0_angleError, 6);
+    Serial.print(",");
+    Serial.println(y1_posError, 6);
 
-  // 4) y 전송: "fid,angErr,posErr"
-  Serial.print(frameId); Serial.write(',');
-  Serial.print(angErr, 3); Serial.write(',');
-  Serial.println(posErr, 3);
+    // 4) 루프 시작 시각 기준 정확히 20ms 지연 내에서 u 1회만 수신 시도
+    double u_recv = u_applied;           // 기본값: 직전 u 유지
+    bool got = readUSingleWithin(actuationDelayMs, u_recv);
+    if (got) u_applied = u_recv;         // 수신되면 갱신
 
-  // 5) 20ms 창: u 수신(첫 수신만 채택), 분류 카운트
-  bool gotU = false;
-  double u_tmp = 0.0;
-  uint32_t u_fid = 0;
-
-  while ((int32_t)(micros() - deadline) < 0) {
-    uint32_t f_in; double u_in;
-    if (tryReadU(f_in, u_in)) {
-      if (f_in == frameId) {
-        if (!gotU) { gotU = true; u_tmp = u_in; u_fid = f_in; }
-        else       { recv_dup_same_fid++; /* 중복 도착 */ }
-      } else if (f_in < frameId) {
-        recv_late_old_fid++;  // 늦게 도착한 이전 프레임의 u
-      } else {
-        recv_future_fid++;    // 미래 프레임의 u (이상)
-      }
+    // (정밀 지연) 루프 시작→20ms 도달 보장
+    while ((long)(millis() - t_start) < (long)actuationDelayMs) {
+      // 남은 수 μs 동안 바쁜대기 (짧은 sleep로 CPU 점유 최소화)
+      delayMicroseconds(50);
     }
-    delayMicroseconds(150);
+
+    // 5) 모터 구동 (네거티브 피드백)
+    double u_cmd = -u_applied;
+    int pwmValue = constrain((int)fabs(u_cmd), 0, 255);
+    bool forward = (u_cmd > 0.0);
+    moveMotor(pwmValue, forward);
+
+    // 6) 남은 시간 대기하여 30ms 정확히 맞춤
+    while ((long)(millis() - t_start) < (long)controlIntervalMs) {
+      // 필요 시 여기서 아주 짧게 쉬어 전력/점유율 낮춤
+      delayMicroseconds(100);
+    }
   }
-
-  // 6) 적용
-  double u_to_apply = gotU ? u_tmp : u_last;
-  if (!gotU) miss_no_u_in_win++;
-
-  double u_cmd = -u_to_apply; // 네거티브 피드백
-  int pwmValue = constrain((int)fabs(u_cmd), 0, 255);
-  bool forward = (u_cmd > 0.0);
-  moveMotor(pwmValue, forward);
-  u_last = u_to_apply;
-
-  // 7) 다음 프레임
-  frameId++;
 }
