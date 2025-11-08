@@ -70,7 +70,7 @@ func main() {
 	}
 
 	// ======== Load artifacts ========
-	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw_for_N10")
+	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw_for_N12")
 
 	recoveredX := new(rlwe.Ciphertext)
 	if err := com_utils.ReadRT(filepath.Join(base, "xCtPack.dat"), recoveredX); err != nil {
