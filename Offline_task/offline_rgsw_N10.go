@@ -38,7 +38,7 @@ func main() {
 
 		Lp = 30.0
 		Li = 0.5
-		Ld = 3.0
+		Ld = 5.0
 	)
 
 	F := [][]float64{
