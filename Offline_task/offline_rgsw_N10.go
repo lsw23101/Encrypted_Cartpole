@@ -32,9 +32,9 @@ func main() {
 
 	// ================= Controller (PID-based) =================
 	const (
-		Kp = 32.0
+		Kp = 34.0
 		Ki = 2.5
-		Kd = 42.0
+		Kd = 34.0
 
 		Lp = 30.0
 		Li = 0.5

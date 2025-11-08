@@ -11,11 +11,9 @@ import (
 	"math"
 	"net"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.bug.st/serial"
@@ -49,16 +47,16 @@ const (
 
 // PID 계수
 const (
-	Kp = 32.0
+	Kp = 34.0
 	Ki = 2.5
-	Kd = 42.0
+	Kd = 34.0
 
 	Lp = 30.0
 	Li = 0.5
 	Ld = 5.0
 )
 
-// ===== 추가: 안전 임계치 & 루프 횟수 =====
+// ===== 안전 임계치 & 루프 횟수 =====
 const (
 	angleLimit    = 40.0  // |angle| > 40 → u=0
 	positionLimit = 200.0 // |position| > 200 → u=0
@@ -168,48 +166,16 @@ func main() {
 	sc.Buffer(make([]byte, 0, 256), 1024)
 	fmt.Println("[Combined] Serial opened:", serialPort, baudRate)
 
-	// ===== 신호 처리 (Ctrl+C / SIGTERM) =====
-	stopSig := make(chan os.Signal, 1)
-	signal.Notify(stopSig, os.Interrupt, syscall.SIGTERM)
-	quit := make(chan struct{})
-	go func() {
-		<-stopSig
-		fmt.Println("\n[Signal] Interrupt received. Will stop after current iteration and save CSV...")
-		close(quit)
-	}()
-
 	// ===== 로깅 준비 =====
 	startT := time.Now()
 	csvPath := fmt.Sprintf("enc_plant_log_%s.csv", time.Now().Format("20060102_150405"))
 	records := make([][]string, 0, 4096)
 	fmt.Println("[CSV] Logging to:", csvPath)
 
-	// 종료 시 CSV 저장(가능한 한 보장)
-	defer func() {
-		if len(records) == 0 {
-			fmt.Println("[CSV] No data collected.")
-			return
-		}
-		if err := saveCSV(csvPath, records); err != nil {
-			log.Printf("[CSV] Save error: %v", err)
-		} else {
-			fmt.Printf("[CSV] Saved %d rows to %s\n", len(records), csvPath)
-		}
-	}()
-
 	var lastTime time.Time
 	iter := 0
 
-Loop:
 	for {
-		// 신호로 중지 요청이 이미 들어왔고, 새 입력을 기다리기 싫다면 여기서도 체크 가능
-		select {
-		case <-quit:
-			fmt.Println("[Combined] Stop requested before reading next sample.")
-			break Loop
-		default:
-		}
-
 		// 1) Arduino에서 y 읽기 (angle=y[0], position=y[1] 가정)
 		if !sc.Scan() {
 			if err := sc.Err(); err != nil {
@@ -228,7 +194,7 @@ Loop:
 		y[0] = y0 // angle
 		y[1] = y1 // position
 
-		// 루프 주기 모니터링
+		// 루프 주기 모니터링 (아두이노가 주기를 정하므로 참고용)
 		now := time.Now()
 		intervalMs := 0.0
 		if !lastTime.IsZero() {
@@ -251,7 +217,7 @@ Loop:
 		yBar := utils.RoundVec(utils.ScalVecMult(1.0/r, y))
 		yCtPack := RLWE.EncPack(yBar, tau, 1.0/L, *encryptor, ringQ, params)
 
-		// 🔹 TCP 왕복 시간 측정 시작 (y 보내고 u 받을 때까지)
+		// 🔹 RTT 측정 시작: y 보내고 u 받을 때까지
 		tStart := time.Now()
 
 		if _, err := yCtPack.WriteTo(wbuf); err != nil {
@@ -270,7 +236,7 @@ Loop:
 			break
 		}
 
-		// 🔹 TCP 왕복시간 (y 송신 → u 수신까지)
+		// 🔹 RTT (ms)
 		rttMs := float64(time.Since(tStart)) / 1e6
 		fmt.Printf("[Latency] TCP round-trip: %.3f ms\n", rttMs)
 
@@ -281,10 +247,10 @@ Loop:
 			uRemote = uVec[0]
 		}
 
-		// == 요청하신 디버그 3종 한 줄 출력 ==
+		// == 디버그 3종 한 줄 출력 ==
 		fmt.Printf("[DEBUG] RTT=%.3f ms | uLocal=%.6f | uRecv=%.6f\n", rttMs, uLocal, uRemote)
 
-		// 6) 두 제어 입력 비교 출력(기존 출력 유지)
+		// 6) 두 제어 입력 비교 출력
 		uDiff := uLocal - uRemote
 		fmt.Printf("[Compare] uLocal=%.6f | uRemote=%.6f | Δ=%.6f\n", uLocal, uRemote, uDiff)
 
@@ -306,7 +272,7 @@ Loop:
 			break
 		}
 
-		// 9) 로깅 (CSV용) — 포맷/내용 그대로 유지
+		// 9) 로깅 (CSV용) — 포맷/내용 유지
 		elapsedMs := float64(time.Since(startT)) / 1e6
 		record := []string{
 			strconv.Itoa(iter),
@@ -324,18 +290,21 @@ Loop:
 		records = append(records, record)
 
 		iter++
-
-		// 10) 루프 종료 조건
 		if maxIter > 0 && iter >= maxIter {
 			fmt.Println("[Combined] Reached max iterations.")
 			break
 		}
-		select {
-		case <-quit:
-			fmt.Println("[Combined] Stop requested by signal.")
-			break Loop
-		default:
-		}
+	}
+
+	// 종료 시 CSV 저장
+	if len(records) == 0 {
+		fmt.Println("[CSV] No data collected.")
+		return
+	}
+	if err := saveCSV(csvPath, records); err != nil {
+		log.Printf("[CSV] Save error: %v", err)
+	} else {
+		fmt.Printf("[CSV] Saved %d rows to %s\n", len(records), csvPath)
 	}
 	fmt.Println("[Combined] Stopped.")
 }
