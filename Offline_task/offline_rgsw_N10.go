@@ -32,13 +32,13 @@ func main() {
 
 	// ================= Controller (PID-based) =================
 	const (
-		Kp = 34.0
+		Kp = 32.0
 		Ki = 2.5
-		Kd = 34.0
+		Kd = 40.0
 
-		Lp = 30.0
-		Li = 0.5
-		Ld = 5.0
+		Lp = 35.0
+		Li = 0.7
+		Ld = 10.0
 	)
 
 	F := [][]float64{
