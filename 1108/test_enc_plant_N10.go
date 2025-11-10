@@ -47,9 +47,9 @@ const (
 
 // PID 계수
 const (
-	Kp = 32.0
+	Kp = 34.0
 	Ki = 2.5
-	Kd = 40.0
+	Kd = 50.0
 
 	Lp = 35.0
 	Li = 0.7
