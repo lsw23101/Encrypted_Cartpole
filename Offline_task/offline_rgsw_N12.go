@@ -34,11 +34,11 @@ func main() {
 	const (
 		Kp = 32.0
 		Ki = 2.5
-		Kd = 40.0
+		Kd = 42.0
 
-		Lp = 35.0
+		Lp = 30.0
 		Li = 0.7
-		Ld = 10.0
+		Ld = 7.0
 	)
 
 	F := [][]float64{
