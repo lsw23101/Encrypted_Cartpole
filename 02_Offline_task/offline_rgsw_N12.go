@@ -1,7 +1,7 @@
 package main
 
 import (
-	"Encrypted_Cartpole/com_utils"
+	com_utils "Encrypted_Cartpole/03_Utils"
 	"fmt"
 	"log"
 	"math"
@@ -33,11 +33,11 @@ func main() {
 	// ================= Controller (PID-based) =================
 	const (
 		Kp = 32.0
-		Ki = 2.5
+		Ki = 2.7
 		Kd = 42.0
 
 		Lp = 30.0
-		Li = 0.7
+		Li = 0.6
 		Ld = 7.0
 	)
 
@@ -232,7 +232,7 @@ func main() {
 	decryptorRLWE2 := rlwe.NewDecryptor(params, recoveredSk)
 
 	// ================= 9) Simulation: baseline (unencrypted) =================
-	iter := 500
+	iter := 10
 	fmt.Printf("Number of iterations: %v\n", iter)
 
 	yUnenc := [][]float64{}
