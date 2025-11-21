@@ -1,7 +1,7 @@
 package main
 
 import (
-	"Encrypted_Cartpole/com_utils"
+	com_utils "Encrypted_Cartpole/03_Utils"
 	"bufio"
 	"fmt"
 	"log"
@@ -70,7 +70,7 @@ func main() {
 	}
 
 	// ======== Load artifacts ========
-	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw_for_N10")
+	base := filepath.Join("..","..", "02_Offline_task", "enc_data", "rgsw_for_N10")
 
 	recoveredX := new(rlwe.Ciphertext)
 	if err := com_utils.ReadRT(filepath.Join(base, "xCtPack.dat"), recoveredX); err != nil {

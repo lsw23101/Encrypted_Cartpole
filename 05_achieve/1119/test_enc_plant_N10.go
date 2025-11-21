@@ -2,7 +2,7 @@
 package main
 
 import (
-	"Encrypted_Cartpole/com_utils"
+	com_utils "Encrypted_Cartpole/03_Utils"
 	"bufio"
 	"encoding/csv"
 	"errors"
