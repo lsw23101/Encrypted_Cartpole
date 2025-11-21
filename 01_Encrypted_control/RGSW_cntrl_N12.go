@@ -24,7 +24,7 @@ const (
 	numIters = 1500    // 0 means infinite loop
 	period   = 0 * time.Millisecond
 
-	printEvery = 100 // ★ 매 100회마다 요약 출력
+	printEvery = 10 // ★ 매 100회마다 요약 출력
 )
 
 func ms(d time.Duration) float64 { return float64(d) / 1e6 }
@@ -71,7 +71,7 @@ func main() {
 	}
 
 	// ======== Load artifacts ========
-	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw_for_N12")
+	base := filepath.Join("..", "02_Offline_task", "enc_data", "rgsw_for_N12")
 
 	recoveredX := new(rlwe.Ciphertext)
 	if err := com_utils.ReadRT(filepath.Join(base, "xCtPack.dat"), recoveredX); err != nil {
@@ -142,12 +142,13 @@ func main() {
 	// 마지막 y/u 암호문 보관(샘플 계수 프린트용)
 	var lastYct *rlwe.Ciphertext
 	var lastUct *rlwe.Ciphertext
+	var lastState *rlwe.Ciphertext
 
 	printWindow := func() {
 		if winCount == 0 {
 			return
 		}
-		avgRecv := ms(winRecv) / float64(winCount)
+		// avgRecv := ms(winRecv) / float64(winCount) // 보내고 받을때까지 걸리는 시간
 		avgUnpack := ms(winUnpack) / float64(winCount)
 		avgComputeU := ms(winComputeU) / float64(winCount)
 		avgSend := ms(winSend) / float64(winCount)
@@ -159,17 +160,31 @@ func main() {
 		if avgKB == 0 {
 			avgKB = float64(winRecvBytes) / float64(winCount) / 1024.0
 		}
+		fmt.Printf(
+			"\n[Controller]\n<Time and data size> (%d iterations)\n"+
+				"  Evaluate time : %7.3f ms\n"+
+				"  Loop time     : %7.3f ms\n"+
+				"  Cipher size   : %7.1f KB\n"+
+				" <I/O & State>\n"+
+				"  yCt           : %s\n"+
+				"  uCt           : %s\n"+
+				"  stateCt       : %s\n",
+			winCount,
+			avgPhase,
+			avgTotal,
+			avgKB,
+			ctFirstCoeffHex(lastYct),
+			ctFirstCoeffHex(lastUct),
+			ctFirstCoeffHex(lastState),
+		)
+		// if winCommSamples > 0 {
+		// 	avgComm := ms(winSendToNextRecv) / float64(winCommSamples)
+		// 	fmt.Printf("[Controller][COMM last %d iteration]\n send->nextRecv = %.3f ms\n", winCommSamples, avgComm)
+		// }
 
-		fmt.Printf("[Controller][AVG last %d] recv=%.3f ms, phase(unpack+computeU+send+update)=%.3f ms, total=%.3f ms | avg ct bytes ≈ %.1f KB\n",
-			winCount, avgRecv, avgPhase, avgTotal, avgKB)
-
-		if winCommSamples > 0 {
-			avgComm := ms(winSendToNextRecv) / float64(winCommSamples)
-			fmt.Printf("[Controller][COMM last %d] send->nextRecv = %.3f ms\n", winCommSamples, avgComm)
-		}
-
-		fmt.Printf("[Controller][CT sample coeff] yCt[0][0]=%s | uCt[0][0]=%s\n",
-			ctFirstCoeffHex(lastYct), ctFirstCoeffHex(lastUct))
+		// fmt.Printf("ctRGSW = %s\n", ctF[0].Value[0].Value[0][0]) //
+		// fmt.Printf("[Controller] [part of Encrypted Controller]\n F=%s | G=%s | H= %s | J= %s\n",
+		// 	ctF.Value(0), ctFirstCoeffHex(ctF[0].Value[0]), ctFirstCoeffHex(ctH), ctFirstCoeffHex(ctJ))
 	}
 
 	resetWindow := func() {
@@ -253,10 +268,11 @@ func main() {
 		// 샘플 계수용
 		lastYct = yCtPack
 		lastUct = uCtPack
+		lastState = recoveredX
 
 		itersDone++
 
-		// 매 100회마다 출력 후 리셋
+		// 적당한 루프마다 프린트 찍기
 		if winCount >= printEvery {
 			printWindow()
 			resetWindow()
@@ -275,5 +291,5 @@ func main() {
 		}
 	}
 
-	fmt.Println("[Controller] Done. (r,s,L) =", r, s, L, "| m =", m)
+	fmt.Println("[Controller] Done.)")
 }

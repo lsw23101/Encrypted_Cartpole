@@ -25,7 +25,8 @@ import (
 
 // ===== 사용자 환경 설정 =====
 const (
-	addr       = "192.168.20.133:8080" // TCP 컨트롤러 주소
+	addr = "192.168.20.133:8080" // TCP 컨트롤러 주소
+	// addr       = "192.168.20.133:8080" // TCP 컨트롤러 주소
 	serialPort = "/dev/ttyACM0"
 	baudRate   = 115200
 
@@ -137,7 +138,7 @@ func main() {
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	base := filepath.Join("..", "Offline_task", "enc_data", "rgsw_for_N12")
+	base := filepath.Join("..", "02_Offline_task", "enc_data", "rgsw_for_N12")
 	sk := new(rlwe.SecretKey)
 	if err := com_utils.ReadRT(filepath.Join(base, "sk.dat"), sk); err != nil {
 		log.Fatalf("load sk: %v", err)
@@ -169,12 +170,12 @@ func main() {
 	// ===== 로깅 준비 =====
 	startT := time.Now()
 
-	// ▼▼▼ 변경: data 폴더에 저장 ▼▼▼
+	// ▼▼▼ data 폴더에 항상 data.csv로 저장 ▼▼▼
 	outDir := "data"
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		log.Fatalf("mkdir %s: %v", outDir, err)
 	}
-	csvPath := filepath.Join(outDir, fmt.Sprintf("enc_plant_log_%s.csv", time.Now().Format("20060102_150405")))
+	csvPath := filepath.Join(outDir, "data.csv") // ← 항상 같은 이름으로 저장
 	// ▲▲▲ 변경 끝 ▲▲▲
 
 	records := make([][]string, 0, 4096)
