@@ -49,11 +49,11 @@ const (
 // PID 계수
 const (
 	Kp = 32.0
-	Ki = 2.5
+	Ki = 2.7
 	Kd = 42.0
 
 	Lp = 30.0
-	Li = 0.7
+	Li = 0.6
 	Ld = 7.0
 )
 
