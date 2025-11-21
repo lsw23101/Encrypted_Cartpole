@@ -29,7 +29,7 @@ double u_applied     = 0.0;      // 마지막으로 적용된 u (타임아웃 �
 
 // ---------------- 타이밍 ----------------
 const unsigned long controlIntervalMs = 30; // 전체 제어 주기
-const unsigned long actuationDelayMs  = 20; // 루프 시작→구동까지 고정 지연
+const unsigned long actuationDelayMs  = 25; // 루프 시작→구동까지 고정 지연
 unsigned long t_next = 0;                   // 다음 루프 기준시각(드리프트 제거)
 
 // ---------------- 유틸 ----------------

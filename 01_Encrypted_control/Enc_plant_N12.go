@@ -4,11 +4,14 @@ package main
 import (
 	com_utils "Encrypted_Cartpole/03_Utils"
 	"bufio"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -44,15 +47,26 @@ const (
 )
 
 // PID 계수
-const (
-	Kp = 32.0
-	Ki = 2.5
-	Kd = 42.0
+// const (
+// 	Kp = 32.0
+// 	Ki = 2.7
+// 	Kd = 42.0
 
-	Lp = 30.0
-	Li = 0.7
-	Ld = 7.0
-)
+// 	Lp = 30.0
+// 	Li = 0.6
+// 	Ld = 7.0
+// )
+
+	const (
+		Kp = 32.0
+		Ki = 2.5
+		Kd = 42.0
+
+		Lp = 30.0
+		Li = 0.7
+		Ld = 7.0
+	)
+
 
 // ===== 안전 임계치 & 루프 횟수 =====
 const (
@@ -86,6 +100,42 @@ func parseTwoFloats(line string) (float64, float64, error) {
 	return a0, a1, nil
 }
 
+// ---- CSV 저장 ----
+func saveCSV(path string, rows [][]string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	header := []string{
+		"iter", "t_ms",
+		"y0_angle", "y1_position",
+		"uLocal", "uRemote", "uOut", "uDiff",
+		"loopIntervalMs", "tcpRttMs",
+		"clamped",
+	}
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if err := w.Write(r); err != nil {
+			return err
+		}
+	}
+	return w.Error()
+}
+
+func boolTo01(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
 func main() {
 	// ===== RLWE 세팅 =====
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
@@ -99,9 +149,9 @@ func main() {
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	base := "../02_Offline_task/enc_data/rgsw_for_N12"
+	base := filepath.Join("..", "02_Offline_task", "enc_data", "rgsw_for_N12")
 	sk := new(rlwe.SecretKey)
-	if err := com_utils.ReadRT(base+"/sk.dat", sk); err != nil {
+	if err := com_utils.ReadRT(filepath.Join(base, "sk.dat"), sk); err != nil {
 		log.Fatalf("load sk: %v", err)
 	}
 	encryptor := rlwe.NewEncryptor(params, sk)
@@ -127,6 +177,20 @@ func main() {
 	sc := bufio.NewScanner(port)
 	sc.Buffer(make([]byte, 0, 256), 1024)
 	fmt.Println("[Combined] Serial opened:", serialPort, baudRate)
+
+	// ===== 로깅 준비 =====
+	startT := time.Now()
+
+	// ▼▼▼ data 폴더에 항상 data.csv로 저장 ▼▼▼
+	outDir := "data"
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		log.Fatalf("mkdir %s: %v", outDir, err)
+	}
+	csvPath := filepath.Join(outDir, "data.csv") // ← 항상 같은 이름으로 저장
+	// ▲▲▲ 변경 끝 ▲▲▲
+
+	records := make([][]string, 0, 4096)
+	fmt.Println("[CSV] Logging to:", csvPath)
 
 	var lastTime time.Time
 	iter := 0
@@ -228,6 +292,23 @@ func main() {
 			break
 		}
 
+		// 9) 로깅 (CSV용) — 포맷/내용 유지
+		elapsedMs := float64(time.Since(startT)) / 1e6
+		record := []string{
+			strconv.Itoa(iter),
+			fmt.Sprintf("%.3f", elapsedMs),
+			fmt.Sprintf("%.3f", y[0]),
+			fmt.Sprintf("%.3f", y[1]),
+			fmt.Sprintf("%.3f", uLocal),
+			fmt.Sprintf("%.3f", uRemote),
+			fmt.Sprintf("%.3f", uOut),
+			fmt.Sprintf("%.3f", uDiff),
+			fmt.Sprintf("%.3f", intervalMs),
+			fmt.Sprintf("%.3f", rttMs),
+			boolTo01(clamped),
+		}
+		records = append(records, record)
+
 		iter++
 		if maxIter > 0 && iter >= maxIter {
 			fmt.Println("[Combined] Reached max iterations.")
@@ -235,5 +316,15 @@ func main() {
 		}
 	}
 
+	// 종료 시 CSV 저장
+	if len(records) == 0 {
+		fmt.Println("[CSV] No data collected.")
+		return
+	}
+	if err := saveCSV(csvPath, records); err != nil {
+		log.Printf("[CSV] Save error: %v", err)
+	} else {
+		fmt.Printf("[CSV] Saved %d rows to %s\n", len(records), csvPath)
+	}
 	fmt.Println("[Combined] Stopped.")
 }
