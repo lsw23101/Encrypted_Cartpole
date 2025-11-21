@@ -33,11 +33,11 @@ func main() {
 	// ================= Controller (PID-based) =================
 	const (
 		Kp = 32.0
-		Ki = 2.7
+		Ki = 2.5
 		Kd = 42.0
 
 		Lp = 30.0
-		Li = 0.6
+		Li = 0.7
 		Ld = 7.0
 	)
 
@@ -72,7 +72,7 @@ func main() {
 	p := len(G[0])
 
 	// ================= 2) Quantization parameters =================
-	s := 1 / 100.0
+	s := 1 / 10.0
 	L := 1 / 10000.0
 	r := 1 / 1000.0
 	fmt.Printf("Scaling parameters 1/L: %v, 1/s: %v, 1/r: %v\n", 1/L, 1/s, 1/r)
@@ -232,7 +232,7 @@ func main() {
 	decryptorRLWE2 := rlwe.NewDecryptor(params, recoveredSk)
 
 	// ================= 9) Simulation: baseline (unencrypted) =================
-	iter := 10
+	iter := 500
 	fmt.Printf("Number of iterations: %v\n", iter)
 
 	yUnenc := [][]float64{}
